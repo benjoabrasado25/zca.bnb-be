@@ -63,68 +63,6 @@ INSTALLED_APPS = [
 UNFOLD = {
     "SITE_TITLE": "ZCA BnB Admin",
     "SITE_HEADER": "ZCA BnB",
-    "SITE_SYMBOL": "home",
-    "SHOW_HISTORY": True,
-    "SHOW_VIEW_ON_SITE": True,
-    "COLORS": {
-        "primary": {
-            "50": "254 242 242",
-            "100": "254 226 226",
-            "200": "254 202 202",
-            "300": "252 165 165",
-            "400": "248 113 113",
-            "500": "239 68 68",
-            "600": "220 38 38",
-            "700": "185 28 28",
-            "800": "153 27 27",
-            "900": "127 29 29",
-            "950": "69 10 10",
-        },
-    },
-    "SIDEBAR": {
-        "show_search": True,
-        "show_all_applications": True,
-        "navigation": [
-            {
-                "title": "Dashboard",
-                "icon": "dashboard",
-                "link": "/admin/",
-            },
-            {
-                "title": "Listings",
-                "icon": "home",
-                "items": [
-                    {"title": "All Listings", "icon": "list", "link": "/admin/listings/listing/"},
-                    {"title": "Cities", "icon": "location_city", "link": "/admin/listings/city/"},
-                    {"title": "Amenities", "icon": "check_circle", "link": "/admin/listings/listingamenity/"},
-                ],
-            },
-            {
-                "title": "Bookings",
-                "icon": "calendar_month",
-                "items": [
-                    {"title": "All Bookings", "icon": "book_online", "link": "/admin/bookings/booking/"},
-                    {"title": "Blocked Dates", "icon": "block", "link": "/admin/bookings/blockeddate/"},
-                ],
-            },
-            {
-                "title": "Users",
-                "icon": "people",
-                "items": [
-                    {"title": "All Users", "icon": "person", "link": "/admin/users/user/"},
-                    {"title": "Groups", "icon": "group", "link": "/admin/auth/group/"},
-                ],
-            },
-            {
-                "title": "Integrations",
-                "icon": "sync",
-                "items": [
-                    {"title": "iCal Syncs", "icon": "calendar_today", "link": "/admin/integrations/icalsync/"},
-                    {"title": "Sync Logs", "icon": "history", "link": "/admin/integrations/icalsynclog/"},
-                ],
-            },
-        ],
-    },
 }
 
 MIDDLEWARE = [
