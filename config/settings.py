@@ -79,7 +79,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database - PostgreSQL
 # Use DATABASE_URL if available (Railway), otherwise use individual settings
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 if DATABASE_URL:
     DATABASES = {
@@ -90,6 +90,7 @@ if DATABASE_URL:
         )
     }
 else:
+    # Fallback for local development or when DATABASE_URL is not set
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -98,9 +99,6 @@ else:
             'PASSWORD': os.environ.get('DB_PASSWORD', ''),
             'HOST': os.environ.get('DB_HOST', 'localhost'),
             'PORT': os.environ.get('DB_PORT', '5432'),
-            'OPTIONS': {
-                'connect_timeout': 10,
-            },
         }
     }
 
