@@ -58,6 +58,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('bookings', '0001_initial'),
+        ('listings', '0002_add_listing_approval'),
     ]
 
     operations = [
