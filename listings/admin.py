@@ -1,6 +1,7 @@
-"""Listing admin configuration."""
+"""Listing admin configuration with approval workflow."""
 
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import Listing, ListingImage, ListingAmenity, ListingAmenityMapping
 
@@ -27,9 +28,10 @@ class ListingAdmin(admin.ModelAdmin):
         'created_at',
     ]
     list_filter = ['status', 'property_type', 'city', 'is_instant_bookable']
-    search_fields = ['title', 'description', 'address', 'city']
-    readonly_fields = ['ical_export_token', 'created_at', 'updated_at']
+    search_fields = ['title', 'description', 'address', 'city', 'host__username', 'host__email']
+    readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at']
     inlines = [ListingImageInline, ListingAmenityMappingInline]
+    actions = ['approve_listings', 'reject_listings']
 
     fieldsets = (
         ('Basic Info', {
@@ -50,10 +52,36 @@ class ListingAdmin(admin.ModelAdmin):
         ('Settings', {
             'fields': ('is_instant_bookable', 'ical_export_token'),
         }),
+        ('Review Status', {
+            'fields': ('submitted_for_review_at', 'reviewed_at', 'reviewed_by', 'rejection_reason'),
+            'classes': ('collapse',),
+        }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
         }),
     )
+
+    @admin.action(description='Approve selected listings')
+    def approve_listings(self, request, queryset):
+        count = queryset.filter(
+            status=Listing.Status.PENDING_REVIEW
+        ).update(
+            status=Listing.Status.ACTIVE,
+            reviewed_at=timezone.now(),
+            reviewed_by=request.user,
+        )
+        self.message_user(request, f'{count} listing(s) approved and now active.')
+
+    @admin.action(description='Reject selected listings')
+    def reject_listings(self, request, queryset):
+        count = queryset.filter(
+            status=Listing.Status.PENDING_REVIEW
+        ).update(
+            status=Listing.Status.REJECTED,
+            reviewed_at=timezone.now(),
+            reviewed_by=request.user,
+        )
+        self.message_user(request, f'{count} listing(s) rejected.')
 
 
 @admin.register(ListingAmenity)

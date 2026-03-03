@@ -15,6 +15,12 @@ class User(AbstractUser):
         HOST = 'host', 'Host'
         BOTH = 'both', 'Both'
 
+    class HostStatus(models.TextChoices):
+        NOT_APPLIED = 'not_applied', 'Not Applied'
+        PENDING = 'pending', 'Pending Approval'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+
     user_type = models.CharField(
         max_length=10,
         choices=UserType.choices,
@@ -28,6 +34,18 @@ class User(AbstractUser):
     )
     bio = models.TextField(blank=True)
     is_verified = models.BooleanField(default=False)
+
+    # Host approval workflow
+    host_status = models.CharField(
+        max_length=20,
+        choices=HostStatus.choices,
+        default=HostStatus.NOT_APPLIED,
+        help_text='Admin approval status for hosting privileges',
+    )
+    host_application_date = models.DateTimeField(null=True, blank=True)
+    host_approved_date = models.DateTimeField(null=True, blank=True)
+    host_rejection_reason = models.TextField(blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -41,8 +59,17 @@ class User(AbstractUser):
 
     @property
     def is_host(self):
-        return self.user_type in [self.UserType.HOST, self.UserType.BOTH]
+        """User is a host only if approved by admin."""
+        return (
+            self.user_type in [self.UserType.HOST, self.UserType.BOTH] and
+            self.host_status == self.HostStatus.APPROVED
+        )
 
     @property
     def is_guest(self):
         return self.user_type in [self.UserType.GUEST, self.UserType.BOTH]
+
+    @property
+    def can_create_listing(self):
+        """Check if user can create listings (must be approved host)."""
+        return self.is_host

@@ -18,7 +18,9 @@ class Listing(models.Model):
 
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
+        PENDING_REVIEW = 'pending_review', 'Pending Review'
         ACTIVE = 'active', 'Active'
+        REJECTED = 'rejected', 'Rejected'
         INACTIVE = 'inactive', 'Inactive'
 
     id = models.BigAutoField(primary_key=True)
@@ -85,6 +87,18 @@ class Listing(models.Model):
 
     # iCal Integration
     ical_export_token = models.UUIDField(default=uuid.uuid4, unique=True)
+
+    # Admin approval workflow
+    submitted_for_review_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_listings',
+    )
+    rejection_reason = models.TextField(blank=True)
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

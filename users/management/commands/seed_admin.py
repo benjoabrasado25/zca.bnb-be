@@ -27,7 +27,8 @@ class Command(BaseCommand):
                 password=password,
                 first_name='Benjo',
                 last_name='Abrasado',
-                is_host=True,
+                user_type=User.UserType.BOTH,
+                host_status=User.HostStatus.APPROVED,
             )
             self.stdout.write(
                 self.style.SUCCESS(f'Successfully created admin user "{username}"')
