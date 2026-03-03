@@ -7,8 +7,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from bookings.services import BookingService
-from .models import Listing, ListingImage, ListingAmenity
+from .models import City, Listing, ListingImage, ListingAmenity
 from .serializers import (
+    CitySerializer,
     ListingListSerializer,
     ListingDetailSerializer,
     ListingCreateUpdateSerializer,
@@ -60,17 +61,20 @@ class ListingFilter(filters.FilterSet):
     bedrooms = filters.NumberFilter(field_name='bedrooms', lookup_expr='gte')
     beds = filters.NumberFilter(field_name='beds', lookup_expr='gte')
     bathrooms = filters.NumberFilter(field_name='bathrooms', lookup_expr='gte')
-    city = filters.CharFilter(field_name='city', lookup_expr='icontains')
-    province = filters.CharFilter(field_name='province', lookup_expr='icontains')
+    city = filters.NumberFilter(field_name='city_id')
+    city_name = filters.CharFilter(field_name='city__name', lookup_expr='icontains')
+    province = filters.CharFilter(field_name='city__province', lookup_expr='icontains')
     property_type = filters.ChoiceFilter(choices=Listing.PropertyType.choices)
+    property_category = filters.ChoiceFilter(choices=Listing.PropertyCategory.choices)
     instant_bookable = filters.BooleanFilter(field_name='is_instant_bookable')
+    featured = filters.BooleanFilter(field_name='is_featured')
 
     class Meta:
         model = Listing
         fields = [
-            'city', 'province', 'property_type',
+            'city', 'city_name', 'province', 'property_type', 'property_category',
             'min_price', 'max_price', 'min_guests',
-            'bedrooms', 'beds', 'bathrooms', 'instant_bookable',
+            'bedrooms', 'beds', 'bathrooms', 'instant_bookable', 'featured',
         ]
 
 
@@ -193,3 +197,17 @@ class AmenityViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ListingAmenitySerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
+
+
+class CityViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for cities (read-only).
+
+    Public endpoint for fetching available cities for dropdown.
+    """
+
+    queryset = City.objects.filter(is_active=True).order_by('order', 'name')
+    serializer_class = CitySerializer
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    search_fields = ['name', 'province']

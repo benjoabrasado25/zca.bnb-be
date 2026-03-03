@@ -3,7 +3,15 @@
 from rest_framework import serializers
 
 from users.serializers import PublicUserSerializer
-from .models import Listing, ListingImage, ListingAmenity, ListingAmenityMapping
+from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityMapping
+
+
+class CitySerializer(serializers.ModelSerializer):
+    """Serializer for cities."""
+
+    class Meta:
+        model = City
+        fields = ['id', 'name', 'province', 'country']
 
 
 class ListingImageSerializer(serializers.ModelSerializer):
@@ -27,6 +35,7 @@ class ListingListSerializer(serializers.ModelSerializer):
     """Serializer for listing list view (minimal data)."""
 
     host = PublicUserSerializer(read_only=True)
+    city = CitySerializer(read_only=True)
     primary_image = serializers.SerializerMethodField()
 
     class Meta:
@@ -35,7 +44,7 @@ class ListingListSerializer(serializers.ModelSerializer):
             'id',
             'title',
             'city',
-            'province',
+            'neighborhood',
             'price_per_night',
             'currency',
             'max_guests',
@@ -43,7 +52,9 @@ class ListingListSerializer(serializers.ModelSerializer):
             'beds',
             'bathrooms',
             'property_type',
+            'property_category',
             'is_instant_bookable',
+            'is_featured',
             'host',
             'primary_image',
         ]
@@ -64,6 +75,7 @@ class ListingDetailSerializer(serializers.ModelSerializer):
     """Serializer for listing detail view (full data)."""
 
     host = PublicUserSerializer(read_only=True)
+    city = CitySerializer(read_only=True)
     images = ListingImageSerializer(many=True, read_only=True)
     amenities = serializers.SerializerMethodField()
 
@@ -74,26 +86,47 @@ class ListingDetailSerializer(serializers.ModelSerializer):
             'title',
             'description',
             'property_type',
+            'property_category',
             'address',
             'city',
-            'province',
+            'neighborhood',
             'postal_code',
-            'country',
             'latitude',
             'longitude',
             'price_per_night',
             'cleaning_fee',
+            'service_fee_percent',
             'currency',
+            'weekly_discount',
+            'monthly_discount',
             'max_guests',
             'bedrooms',
             'beds',
             'bathrooms',
+            # Property details
+            'space_description',
+            'guest_access',
+            'interaction_with_guests',
+            'other_things_to_note',
+            'neighborhood_overview',
+            'getting_around',
+            # Rules
             'minimum_nights',
             'maximum_nights',
             'check_in_time',
             'check_out_time',
+            # House rules
+            'pets_allowed',
+            'smoking_allowed',
+            'parties_allowed',
+            'children_allowed',
+            'infants_allowed',
+            'additional_rules',
+            'cancellation_policy',
+            # Status
             'status',
             'is_instant_bookable',
+            'is_featured',
             'host',
             'images',
             'amenities',
@@ -115,6 +148,7 @@ class ListingCreateUpdateSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    city_id = serializers.IntegerField(write_only=True, required=False)
 
     class Meta:
         model = Listing
@@ -122,24 +156,44 @@ class ListingCreateUpdateSerializer(serializers.ModelSerializer):
             'title',
             'description',
             'property_type',
+            'property_category',
             'address',
-            'city',
-            'province',
+            'city_id',
+            'neighborhood',
             'postal_code',
-            'country',
             'latitude',
             'longitude',
             'price_per_night',
             'cleaning_fee',
+            'service_fee_percent',
             'currency',
+            'weekly_discount',
+            'monthly_discount',
             'max_guests',
             'bedrooms',
             'beds',
             'bathrooms',
+            # Property details
+            'space_description',
+            'guest_access',
+            'interaction_with_guests',
+            'other_things_to_note',
+            'neighborhood_overview',
+            'getting_around',
+            # Rules
             'minimum_nights',
             'maximum_nights',
             'check_in_time',
             'check_out_time',
+            # House rules
+            'pets_allowed',
+            'smoking_allowed',
+            'parties_allowed',
+            'children_allowed',
+            'infants_allowed',
+            'additional_rules',
+            'cancellation_policy',
+            # Status
             'status',
             'is_instant_bookable',
             'amenity_ids',
@@ -147,6 +201,11 @@ class ListingCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         amenity_ids = validated_data.pop('amenity_ids', [])
+        city_id = validated_data.pop('city_id', None)
+
+        if city_id:
+            validated_data['city_id'] = city_id
+
         listing = Listing.objects.create(**validated_data)
 
         # Add amenities
@@ -160,6 +219,10 @@ class ListingCreateUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         amenity_ids = validated_data.pop('amenity_ids', None)
+        city_id = validated_data.pop('city_id', None)
+
+        if city_id:
+            validated_data['city_id'] = city_id
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

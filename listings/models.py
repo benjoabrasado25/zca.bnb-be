@@ -6,6 +6,28 @@ from django.conf import settings
 from django.db import models
 
 
+class City(models.Model):
+    """City model for location dropdown."""
+
+    name = models.CharField(max_length=100)
+    province = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, default='Philippines')
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'cities'
+        verbose_name = 'City'
+        verbose_name_plural = 'Cities'
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        if self.province:
+            return f"{self.name}, {self.province}"
+        return self.name
+
+
 class Listing(models.Model):
     """
     Listing model representing a property for rent.
@@ -15,6 +37,33 @@ class Listing(models.Model):
         ENTIRE_PLACE = 'entire_place', 'Entire Place'
         PRIVATE_ROOM = 'private_room', 'Private Room'
         SHARED_ROOM = 'shared_room', 'Shared Room'
+
+    class PropertyCategory(models.TextChoices):
+        """Airbnb-style property categories."""
+        HOUSE = 'house', 'House'
+        APARTMENT = 'apartment', 'Apartment'
+        GUESTHOUSE = 'guesthouse', 'Guesthouse'
+        HOTEL = 'hotel', 'Hotel'
+        VILLA = 'villa', 'Villa'
+        CONDO = 'condo', 'Condo'
+        TOWNHOUSE = 'townhouse', 'Townhouse'
+        COTTAGE = 'cottage', 'Cottage'
+        CABIN = 'cabin', 'Cabin'
+        RESORT = 'resort', 'Resort'
+        HOSTEL = 'hostel', 'Hostel'
+        BED_AND_BREAKFAST = 'bnb', 'Bed & Breakfast'
+        FARM_STAY = 'farm_stay', 'Farm Stay'
+        BOAT = 'boat', 'Boat'
+        CAMPER = 'camper', 'Camper/RV'
+        TREEHOUSE = 'treehouse', 'Treehouse'
+        TENT = 'tent', 'Tent'
+        OTHER = 'other', 'Other'
+
+    class CancellationPolicy(models.TextChoices):
+        FLEXIBLE = 'flexible', 'Flexible - Full refund 1 day prior'
+        MODERATE = 'moderate', 'Moderate - Full refund 5 days prior'
+        STRICT = 'strict', 'Strict - 50% refund up to 1 week prior'
+        SUPER_STRICT = 'super_strict', 'Super Strict - No refund'
 
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
@@ -36,13 +85,24 @@ class Listing(models.Model):
         choices=PropertyType.choices,
         default=PropertyType.ENTIRE_PLACE,
     )
+    property_category = models.CharField(
+        max_length=20,
+        choices=PropertyCategory.choices,
+        default=PropertyCategory.HOUSE,
+    )
 
-    # Location
+    # Location - City as ForeignKey for dropdown
+    city = models.ForeignKey(
+        City,
+        on_delete=models.PROTECT,
+        related_name='listings',
+        null=True,
+        blank=True,
+    )
+    city_name_old = models.CharField(max_length=100, blank=True, editable=False)  # Temporary, remove after data migration
     address = models.CharField(max_length=500)
-    city = models.CharField(max_length=100)
-    province = models.CharField(max_length=100, blank=True)
+    neighborhood = models.CharField(max_length=200, blank=True, help_text='Specific area/neighborhood')
     postal_code = models.CharField(max_length=20, blank=True)
-    country = models.CharField(max_length=100, default='Philippines')
     latitude = models.DecimalField(
         max_digits=9,
         decimal_places=6,
@@ -63,7 +123,15 @@ class Listing(models.Model):
         decimal_places=2,
         default=0,
     )
+    service_fee_percent = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=10.00,
+        help_text='Service fee percentage charged to guests',
+    )
     currency = models.CharField(max_length=3, default='PHP')
+    weekly_discount = models.PositiveIntegerField(default=0, help_text='Discount % for 7+ nights')
+    monthly_discount = models.PositiveIntegerField(default=0, help_text='Discount % for 28+ nights')
 
     # Capacity
     max_guests = models.PositiveIntegerField(default=1)
@@ -71,11 +139,34 @@ class Listing(models.Model):
     beds = models.PositiveIntegerField(default=1)
     bathrooms = models.DecimalField(max_digits=3, decimal_places=1, default=1)
 
+    # Property Details (Airbnb-style)
+    space_description = models.TextField(blank=True, help_text='Describe the space guests will have access to')
+    guest_access = models.TextField(blank=True, help_text='What areas can guests access?')
+    interaction_with_guests = models.TextField(blank=True, help_text='How much will you interact with guests?')
+    other_things_to_note = models.TextField(blank=True, help_text='Other important details')
+    neighborhood_overview = models.TextField(blank=True, help_text='Describe the neighborhood')
+    getting_around = models.TextField(blank=True, help_text='Transportation options')
+
     # Rules
     minimum_nights = models.PositiveIntegerField(default=1)
     maximum_nights = models.PositiveIntegerField(default=365)
     check_in_time = models.TimeField(default='14:00')
     check_out_time = models.TimeField(default='11:00')
+
+    # House Rules (Airbnb-style)
+    pets_allowed = models.BooleanField(default=False)
+    smoking_allowed = models.BooleanField(default=False)
+    parties_allowed = models.BooleanField(default=False)
+    children_allowed = models.BooleanField(default=True)
+    infants_allowed = models.BooleanField(default=True)
+    additional_rules = models.TextField(blank=True, help_text='Any additional house rules')
+
+    # Cancellation
+    cancellation_policy = models.CharField(
+        max_length=20,
+        choices=CancellationPolicy.choices,
+        default=CancellationPolicy.MODERATE,
+    )
 
     # Status
     status = models.CharField(
@@ -84,6 +175,7 @@ class Listing(models.Model):
         default=Status.DRAFT,
     )
     is_instant_bookable = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False, help_text='Featured on homepage')
 
     # iCal Integration
     ical_export_token = models.UUIDField(default=uuid.uuid4, unique=True)
