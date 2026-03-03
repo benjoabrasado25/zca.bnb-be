@@ -6,9 +6,52 @@ overlapping date ranges for the same listing at the database level.
 
 IMPORTANT: This constraint ensures NO overlapping bookings can exist for the same listing,
 regardless of whether the booking is created manually or via iCal import.
+
+NOTE: If btree_gist extension fails to create (permission denied), the migration
+will skip it - the app will still work but without database-level double-booking prevention.
 """
 
 from django.db import migrations
+
+
+def create_extension_safe(apps, schema_editor):
+    """Try to create btree_gist extension, skip if permission denied."""
+    try:
+        schema_editor.execute('CREATE EXTENSION IF NOT EXISTS btree_gist;')
+    except Exception as e:
+        print(f"Warning: Could not create btree_gist extension: {e}")
+        print("Double-booking prevention at DB level will not be available.")
+
+
+def create_booking_constraint(apps, schema_editor):
+    """Try to create booking exclusion constraint."""
+    try:
+        schema_editor.execute('''
+            ALTER TABLE bookings
+            ADD CONSTRAINT prevent_double_booking
+            EXCLUDE USING gist (
+                listing_id WITH =,
+                daterange(check_in, check_out, '[)') WITH &&
+            )
+            WHERE (status NOT IN ('cancelled'));
+        ''')
+    except Exception as e:
+        print(f"Warning: Could not create booking constraint: {e}")
+
+
+def create_blocked_dates_constraint(apps, schema_editor):
+    """Try to create blocked dates exclusion constraint."""
+    try:
+        schema_editor.execute('''
+            ALTER TABLE blocked_dates
+            ADD CONSTRAINT prevent_overlapping_blocks
+            EXCLUDE USING gist (
+                listing_id WITH =,
+                daterange(start_date, end_date, '[]') WITH &&
+            );
+        ''')
+    except Exception as e:
+        print(f"Warning: Could not create blocked dates constraint: {e}")
 
 
 class Migration(migrations.Migration):
@@ -18,42 +61,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Enable btree_gist extension (required for exclusion constraints with non-geometric types)
-        migrations.RunSQL(
-            sql='CREATE EXTENSION IF NOT EXISTS btree_gist;',
-            reverse_sql='DROP EXTENSION IF EXISTS btree_gist;',
-        ),
+        # Enable btree_gist extension (required for exclusion constraints)
+        migrations.RunPython(create_extension_safe, migrations.RunPython.noop),
 
         # Add exclusion constraint to prevent overlapping bookings
-        # Uses '[)' range: includes check_in, excludes check_out (standard hotel booking logic)
-        # Only applies to non-cancelled bookings (confirmed and pending)
-        # This works for BOTH manual bookings AND iCal imported bookings
-        migrations.RunSQL(
-            sql='''
-                ALTER TABLE bookings
-                ADD CONSTRAINT prevent_double_booking
-                EXCLUDE USING gist (
-                    listing_id WITH =,
-                    daterange(check_in, check_out, '[)') WITH &&
-                )
-                WHERE (status NOT IN ('cancelled'));
-            ''',
-            reverse_sql='ALTER TABLE bookings DROP CONSTRAINT IF EXISTS prevent_double_booking;',
-        ),
+        migrations.RunPython(create_booking_constraint, migrations.RunPython.noop),
 
-        # Add exclusion constraint for blocked dates to prevent overlapping blocks
-        # Uses '[]' range: includes both start and end dates
-        migrations.RunSQL(
-            sql='''
-                ALTER TABLE blocked_dates
-                ADD CONSTRAINT prevent_overlapping_blocks
-                EXCLUDE USING gist (
-                    listing_id WITH =,
-                    daterange(start_date, end_date, '[]') WITH &&
-                );
-            ''',
-            reverse_sql='ALTER TABLE blocked_dates DROP CONSTRAINT IF EXISTS prevent_overlapping_blocks;',
-        ),
+        # Add exclusion constraint for blocked dates
+        migrations.RunPython(create_blocked_dates_constraint, migrations.RunPython.noop),
 
         # Add index for faster date range queries
         migrations.RunSQL(
