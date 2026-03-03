@@ -1,11 +1,12 @@
 """Integration admin configuration."""
 
 from django.contrib import admin
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import IcalSync, IcalSyncLog
 
 
-class IcalSyncLogInline(admin.TabularInline):
+class IcalSyncLogInline(TabularInline):
     model = IcalSyncLog
     extra = 0
     readonly_fields = ['status', 'events_found', 'events_created', 'events_updated', 'events_skipped', 'error_message', 'created_at']
@@ -15,7 +16,7 @@ class IcalSyncLogInline(admin.TabularInline):
 
 
 @admin.register(IcalSync)
-class IcalSyncAdmin(admin.ModelAdmin):
+class IcalSyncAdmin(ModelAdmin):
     list_display = [
         'listing',
         'platform',
@@ -43,7 +44,7 @@ class IcalSyncAdmin(admin.ModelAdmin):
 
 
 @admin.register(IcalSyncLog)
-class IcalSyncLogAdmin(admin.ModelAdmin):
+class IcalSyncLogAdmin(ModelAdmin):
     list_display = [
         'ical_sync',
         'status',

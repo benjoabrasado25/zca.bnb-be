@@ -1,12 +1,13 @@
 """Booking admin configuration."""
 
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 
 from .models import Booking, BlockedDate
 
 
 @admin.register(Booking)
-class BookingAdmin(admin.ModelAdmin):
+class BookingAdmin(ModelAdmin):
     list_display = [
         'id',
         'listing',
@@ -55,7 +56,7 @@ class BookingAdmin(admin.ModelAdmin):
 
 
 @admin.register(BlockedDate)
-class BlockedDateAdmin(admin.ModelAdmin):
+class BlockedDateAdmin(ModelAdmin):
     list_display = ['listing', 'start_date', 'end_date', 'reason', 'created_at']
     list_filter = ['created_at']
     search_fields = ['listing__title', 'reason']

@@ -3,12 +3,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils import timezone
+from unfold.admin import ModelAdmin
 
 from .models import User
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
+class UserAdmin(BaseUserAdmin, ModelAdmin):
     """Admin configuration for custom User model with host approval."""
 
     list_display = [

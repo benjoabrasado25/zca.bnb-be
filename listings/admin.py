@@ -3,12 +3,13 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityMapping
 
 
 @admin.register(City)
-class CityAdmin(admin.ModelAdmin):
+class CityAdmin(ModelAdmin):
     list_display = ['name', 'province', 'country', 'is_active', 'order', 'listing_count']
     list_filter = ['is_active', 'province', 'country']
     search_fields = ['name', 'province']
@@ -20,21 +21,21 @@ class CityAdmin(admin.ModelAdmin):
     listing_count.short_description = 'Listings'
 
 
-class ListingImageInline(admin.TabularInline):
+class ListingImageInline(TabularInline):
     model = ListingImage
     extra = 3
     fields = ['image', 'caption', 'is_primary', 'order']
     ordering = ['order']
 
 
-class ListingAmenityMappingInline(admin.TabularInline):
+class ListingAmenityMappingInline(TabularInline):
     model = ListingAmenityMapping
     extra = 3
     autocomplete_fields = ['amenity']
 
 
 @admin.register(Listing)
-class ListingAdmin(admin.ModelAdmin):
+class ListingAdmin(ModelAdmin):
     list_display = [
         'title',
         'host',
@@ -123,7 +124,7 @@ class ListingAdmin(admin.ModelAdmin):
 
 
 @admin.register(ListingAmenity)
-class ListingAmenityAdmin(admin.ModelAdmin):
+class ListingAmenityAdmin(ModelAdmin):
     list_display = ['name', 'category', 'icon']
     list_filter = ['category']
     search_fields = ['name']
