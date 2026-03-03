@@ -239,7 +239,9 @@ else:
 
 # Security settings for production
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
+    # SECURE_SSL_REDIRECT disabled - Railway handles SSL at load balancer level
+    # Internal healthchecks come over HTTP, so this would break them
+    SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True

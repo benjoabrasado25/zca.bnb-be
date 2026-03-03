@@ -7,6 +7,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
+from django.db import connection
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -17,8 +18,14 @@ from integrations.urls import ical_export_patterns
 
 
 def health_check(request):
-    """Simple health check endpoint for Railway."""
-    return JsonResponse({'status': 'ok'})
+    """Health check endpoint for Railway with database connectivity test."""
+    try:
+        # Test database connectivity
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+        return JsonResponse({'status': 'ok', 'database': 'connected'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'database': str(e)}, status=503)
 
 
 urlpatterns = [
