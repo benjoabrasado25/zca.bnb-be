@@ -429,3 +429,63 @@ class IcalImportService:
         )
 
         return results
+
+
+class IcalSyncService:
+    """
+    High-level service for iCal sync operations.
+    Provides a simple interface for manual sync from admin.
+    """
+
+    def sync(self, ical_sync: IcalSync) -> Tuple[bool, str]:
+        """
+        Synchronize a single iCal feed.
+
+        Returns:
+            Tuple of (success, message)
+        """
+        created, updated, skipped, conflicts, error = IcalImportService.sync_ical(ical_sync)
+
+        # Determine log status
+        if error:
+            log_status = IcalSyncLog.Status.FAILED
+        elif conflicts > 0 and (created > 0 or updated > 0):
+            log_status = IcalSyncLog.Status.PARTIAL
+        elif created > 0 or updated > 0:
+            log_status = IcalSyncLog.Status.SUCCESS
+        else:
+            log_status = IcalSyncLog.Status.SUCCESS
+
+        # Create log entry
+        IcalSyncLog.objects.create(
+            ical_sync=ical_sync,
+            status=log_status,
+            events_found=created + updated + skipped + conflicts,
+            events_created=created,
+            events_updated=updated,
+            events_skipped=skipped + conflicts,
+            error_message=error,
+        )
+
+        # Update sync record
+        ical_sync.last_synced_at = timezone.now()
+        ical_sync.sync_count += 1
+
+        if error:
+            ical_sync.last_error = error
+            ical_sync.status = IcalSync.SyncStatus.ERROR
+            ical_sync.save(update_fields=[
+                'last_synced_at', 'sync_count', 'last_error', 'status', 'updated_at'
+            ])
+            return False, error
+        else:
+            ical_sync.last_error = ''
+            ical_sync.status = IcalSync.SyncStatus.ACTIVE
+            ical_sync.save(update_fields=[
+                'last_synced_at', 'sync_count', 'last_error', 'status', 'updated_at'
+            ])
+
+            message = f"Created {created}, updated {updated}"
+            if conflicts > 0:
+                message += f", {conflicts} conflicts skipped"
+            return True, message

@@ -42,11 +42,20 @@ class IcalSyncInline(StackedInline):
     model = IcalSync
     extra = 0
     max_num = 1
-    fields = ['platform', 'airbnb_import_url', 'status', 'last_synced_at', 'last_error', 'sync_count']
-    readonly_fields = ['last_synced_at', 'last_error', 'sync_count']
-    classes = ['collapse']
+    fields = ['platform', 'airbnb_import_url', 'status', 'sync_now_button', 'last_synced_at', 'last_error', 'sync_count']
+    readonly_fields = ['last_synced_at', 'last_error', 'sync_count', 'sync_now_button']
     verbose_name = "iCal Sync Configuration"
     verbose_name_plural = "iCal Sync Configuration"
+
+    def sync_now_button(self, obj):
+        if obj and obj.pk:
+            return format_html(
+                '<a class="button" href="{}sync-ical/{}" style="padding: 8px 16px; background: #2271b1; color: white; text-decoration: none; border-radius: 4px;">Sync Now</a>',
+                obj.listing_id,
+                obj.pk
+            )
+        return "Save first to enable sync"
+    sync_now_button.short_description = "Manual Sync"
 
 
 @admin.register(Listing)
@@ -82,8 +91,33 @@ class ListingAdmin(ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('import-airbnb/', self.admin_site.admin_view(self.import_airbnb_view), name='listings_listing_import_airbnb'),
+            path('<int:listing_id>/sync-ical/<int:ical_sync_id>', self.admin_site.admin_view(self.sync_ical_view), name='listings_listing_sync_ical'),
         ]
         return custom_urls + urls
+
+    def sync_ical_view(self, request, listing_id, ical_sync_id):
+        """Manually trigger iCal sync for a listing."""
+        from integrations.models import IcalSync
+        from integrations.ical_service import IcalSyncService
+
+        try:
+            ical_sync = IcalSync.objects.get(pk=ical_sync_id, listing_id=listing_id)
+
+            # Run the sync
+            service = IcalSyncService()
+            success, message = service.sync(ical_sync)
+
+            if success:
+                messages.success(request, f'iCal sync completed: {message}')
+            else:
+                messages.error(request, f'iCal sync failed: {message}')
+
+        except IcalSync.DoesNotExist:
+            messages.error(request, 'iCal sync configuration not found.')
+        except Exception as e:
+            messages.error(request, f'Error during sync: {str(e)}')
+
+        return redirect('admin:listings_listing_change', listing_id)
 
     def import_airbnb_view(self, request):
         """Sync listings from Airbnb - simple page like WordPress plugin."""
