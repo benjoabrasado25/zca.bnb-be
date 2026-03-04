@@ -390,24 +390,42 @@ class BookingService:
                 )
                 return None, 'conflict'
 
-            # Create new booking
+            # Create new booking directly (skip validation for iCal imports)
+            # iCal imports should create bookings even for non-active listings
             try:
-                booking = cls.create_booking(
+                nights = (check_out - check_in).days
+                price_per_night = listing.price_per_night or 0
+                cleaning_fee = listing.cleaning_fee or 0
+                total_price = (price_per_night * nights) + cleaning_fee
+
+                booking = Booking.objects.create(
                     listing=listing,
+                    guest=None,
                     check_in=check_in,
                     check_out=check_out,
+                    num_guests=1,
                     guest_name=summary or 'External Guest',
+                    guest_email='',
+                    guest_phone='',
+                    special_requests='Imported from iCal',
+                    price_per_night=price_per_night,
+                    total_price=total_price,
+                    cleaning_fee=cleaning_fee,
+                    service_fee=0,
+                    status=Booking.Status.CONFIRMED,
                     source=source,
                     external_uid=external_uid,
-                    auto_confirm=True,  # iCal imports are auto-confirmed
+                    confirmed_at=timezone.now(),
+                )
+
+                logger.info(
+                    f"iCal booking created: ID={booking.id}, UID={external_uid}, "
+                    f"dates={check_in} to {check_out}"
                 )
                 return booking, 'created'
 
-            except DoubleBookingError as e:
-                logger.warning(f"iCal import double booking: UID={external_uid}, error={e}")
-                return None, 'conflict'
-            except BookingValidationError as e:
-                logger.warning(f"iCal import validation error: UID={external_uid}, error={e}")
+            except Exception as e:
+                logger.warning(f"iCal import error: UID={external_uid}, error={e}")
                 return None, 'error'
 
     @staticmethod

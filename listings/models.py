@@ -1,9 +1,10 @@
-"""Listing models for ZCA BnB."""
+"""Listing models for StaySuitePH."""
 
 import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils.text import slugify
 
 
 class City(models.Model):
@@ -73,6 +74,7 @@ class Listing(models.Model):
         INACTIVE = 'inactive', 'Inactive'
 
     id = models.BigAutoField(primary_key=True)
+    slug = models.SlugField(max_length=280, unique=True, blank=True)
     host = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -239,6 +241,18 @@ class Listing(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.city}"
+
+    def save(self, *args, **kwargs):
+        """Generate unique slug on save."""
+        if not self.slug:
+            base_slug = slugify(self.title)
+            slug = base_slug
+            counter = 1
+            while Listing.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
 
     def regenerate_ical_token(self):
         """Regenerate the iCal export token."""

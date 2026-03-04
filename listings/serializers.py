@@ -42,6 +42,7 @@ class ListingListSerializer(serializers.ModelSerializer):
         model = Listing
         fields = [
             'id',
+            'slug',
             'title',
             'city',
             'neighborhood',
@@ -80,11 +81,13 @@ class ListingDetailSerializer(serializers.ModelSerializer):
     city = CitySerializer(read_only=True)
     images = ListingImageSerializer(many=True, read_only=True)
     amenities = serializers.SerializerMethodField()
+    booked_dates = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
         fields = [
             'id',
+            'slug',
             'title',
             'description',
             'property_type',
@@ -132,14 +135,42 @@ class ListingDetailSerializer(serializers.ModelSerializer):
             'host',
             'images',
             'amenities',
+            'booked_dates',
+            'booking_url',
+            'airbnb_url',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'host', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'slug', 'host', 'created_at', 'updated_at']
 
     def get_amenities(self, obj):
         mappings = obj.amenity_mappings.select_related('amenity').all()
         return ListingAmenitySerializer([m.amenity for m in mappings], many=True).data
+
+    def get_booked_dates(self, obj):
+        """
+        Get booked date ranges from confirmed/pending bookings.
+
+        Returns a list of objects with 'start' and 'end' date strings.
+        """
+        from datetime import date
+        from bookings.models import Booking
+
+        # Get all confirmed and pending bookings for this listing
+        bookings = Booking.objects.filter(
+            listing=obj,
+            status__in=[Booking.Status.CONFIRMED, Booking.Status.PENDING],
+            check_out__gte=date.today(),
+        ).order_by('check_in')
+
+        # Return date ranges
+        return [
+            {
+                'start': booking.check_in.isoformat(),
+                'end': booking.check_out.isoformat(),
+            }
+            for booking in bookings
+        ]
 
 
 class ListingCreateUpdateSerializer(serializers.ModelSerializer):

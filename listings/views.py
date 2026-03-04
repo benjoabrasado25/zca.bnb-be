@@ -90,10 +90,10 @@ class ListingViewSet(viewsets.ModelViewSet):
     Endpoints:
     - GET /api/listings/ - List all active listings
     - POST /api/listings/ - Create new listing (authenticated)
-    - GET /api/listings/{id}/ - Get listing detail
-    - PUT/PATCH /api/listings/{id}/ - Update listing (owner only)
-    - DELETE /api/listings/{id}/ - Delete listing (owner only)
-    - GET /api/listings/{id}/unavailable-dates/ - Get blocked dates
+    - GET /api/listings/{slug}/ - Get listing detail by slug
+    - PUT/PATCH /api/listings/{slug}/ - Update listing (owner only)
+    - DELETE /api/listings/{slug}/ - Delete listing (owner only)
+    - GET /api/listings/{slug}/unavailable-dates/ - Get blocked dates
     - GET /api/listings/my_listings/ - Get user's listings
     """
 
@@ -102,6 +102,7 @@ class ListingViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'city', 'address']
     ordering_fields = ['price_per_night', 'created_at', 'max_guests']
     ordering = ['-created_at']
+    lookup_field = 'slug'
 
     def get_queryset(self):
         queryset = Listing.objects.select_related('host').prefetch_related('images')
@@ -130,7 +131,7 @@ class ListingViewSet(viewsets.ModelViewSet):
         serializer.save(host=self.request.user)
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.AllowAny])
-    def unavailable_dates(self, request, pk=None):
+    def unavailable_dates(self, request, slug=None):
         """
         Get unavailable dates for a listing.
 
