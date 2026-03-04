@@ -73,8 +73,8 @@ SITE_ID = 1
 
 # Unfold Admin Configuration
 UNFOLD = {
-    "SITE_TITLE": "ZCA BnB Admin",
-    "SITE_HEADER": "ZCA BnB",
+    "SITE_TITLE": "StaySuitePH Admin",
+    "SITE_HEADER": "StaySuitePH",
 }
 
 MIDDLEWARE = [
