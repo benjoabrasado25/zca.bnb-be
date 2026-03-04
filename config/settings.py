@@ -243,7 +243,7 @@ REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
     CACHES = {
         'default': {
-            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
