@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 
-from .models import IcalSync, IcalSyncLog, ApifySyncJob
+from .models import IcalSync, IcalSyncLog, AirbnbSyncJob
 
 
 class IcalSyncLogInline(TabularInline):
@@ -61,8 +61,8 @@ class IcalSyncLogAdmin(ModelAdmin):
     ]
 
 
-@admin.register(ApifySyncJob)
-class ApifySyncJobAdmin(ModelAdmin):
+@admin.register(AirbnbSyncJob)
+class AirbnbSyncJobAdmin(ModelAdmin):
     list_display = [
         'run_id',
         'status_badge',

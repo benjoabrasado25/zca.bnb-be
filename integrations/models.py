@@ -90,8 +90,8 @@ class IcalSyncLog(models.Model):
         return f"Sync Log: {self.ical_sync.listing.title} at {self.created_at}"
 
 
-class ApifySyncJob(models.Model):
-    """Track APIFY sync jobs for importing Airbnb listings."""
+class AirbnbSyncJob(models.Model):
+    """Track sync jobs for importing Airbnb listings."""
 
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
@@ -114,8 +114,14 @@ class ApifySyncJob(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'apify_sync_jobs'
+        db_table = 'airbnb_sync_jobs'
+        verbose_name = 'Airbnb Sync Job'
+        verbose_name_plural = 'Airbnb Sync Jobs'
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"APIFY Job {self.run_id} ({self.status})"
+        return f"Airbnb Sync {self.run_id} ({self.status})"
+
+
+# Alias for backwards compatibility
+ApifySyncJob = AirbnbSyncJob

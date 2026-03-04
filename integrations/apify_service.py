@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from listings.models import Listing, ListingImage, ListingAmenity, ListingAmenityMapping, City
 from users.models import User
-from .models import ApifySyncJob
+from .models import AirbnbSyncJob
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +88,10 @@ class ApifyService:
                 return None, "No run ID in response"
 
             # Create job record
-            ApifySyncJob.objects.create(
+            AirbnbSyncJob.objects.create(
                 run_id=run_id,
                 airbnb_urls=urls,
-                status=ApifySyncJob.Status.RUNNING,
+                status=AirbnbSyncJob.Status.RUNNING,
             )
 
             logger.info(f"Started APIFY job {run_id} for {len(urls)} URLs")
@@ -477,9 +477,9 @@ class ApifyService:
                         results['errors'].append(f"Failed to process: {data.get('url', 'unknown')}")
 
                 # Update job record
-                job = ApifySyncJob.objects.filter(run_id=run_id).first()
+                job = AirbnbSyncJob.objects.filter(run_id=run_id).first()
                 if job:
-                    job.status = ApifySyncJob.Status.SUCCEEDED
+                    job.status = AirbnbSyncJob.Status.SUCCEEDED
                     job.listings_created = results['created']
                     job.listings_updated = results['updated']
                     job.completed_at = timezone.now()
@@ -491,9 +491,9 @@ class ApifyService:
             elif status in ('FAILED', 'ABORTED', 'TIMED-OUT'):
                 results['errors'].append(f"Job {status}")
                 # Update job record
-                job = ApifySyncJob.objects.filter(run_id=run_id).first()
+                job = AirbnbSyncJob.objects.filter(run_id=run_id).first()
                 if job:
-                    job.status = ApifySyncJob.Status.FAILED
+                    job.status = AirbnbSyncJob.Status.FAILED
                     job.error_message = f"Job {status}"
                     job.completed_at = timezone.now()
                     job.save()
