@@ -4,53 +4,42 @@ from django.db import migrations, models, connection
 from django.utils.text import slugify
 
 
-def column_exists(table_name, column_name):
-    """Check if a column exists in the table."""
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = %s AND column_name = %s
-        """, [table_name, column_name])
-        return cursor.fetchone() is not None
-
-
 def generate_slugs(apps, schema_editor):
-    """Generate slugs for existing listings."""
-    Listing = apps.get_model('listings', 'Listing')
+    """Generate slugs for existing listings using raw SQL."""
+    with connection.cursor() as cursor:
+        # Get all listings without slugs
+        cursor.execute("SELECT id, title FROM listings WHERE slug IS NULL OR slug = ''")
+        listings = cursor.fetchall()
 
-    for listing in Listing.objects.all():
-        if listing.slug:  # Skip if slug already exists
-            continue
+        for listing_id, title in listings:
+            base_slug = slugify(title) if title else f'listing-{listing_id}'
+            if not base_slug:
+                base_slug = f'listing-{listing_id}'
 
-        base_slug = slugify(listing.title) if listing.title else f'listing-{listing.pk}'
-        if not base_slug:
-            base_slug = f'listing-{listing.pk}'
+            slug = base_slug
+            counter = 1
 
-        slug = base_slug
-        counter = 1
+            # Check for duplicates
+            while True:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM listings WHERE slug = %s AND id != %s",
+                    [slug, listing_id]
+                )
+                if cursor.fetchone()[0] == 0:
+                    break
+                slug = f"{base_slug}-{counter}"
+                counter += 1
 
-        while Listing.objects.filter(slug=slug).exclude(pk=listing.pk).exists():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-
-        listing.slug = slug
-        listing.save(update_fields=['slug'])
+            # Update the listing
+            cursor.execute(
+                "UPDATE listings SET slug = %s WHERE id = %s",
+                [slug, listing_id]
+            )
 
 
 def reverse_slugs(apps, schema_editor):
-    """Reverse migration - clear slugs."""
-    pass  # No-op for safety
-
-
-def add_slug_field(apps, schema_editor):
-    """Add slug field if it doesn't exist."""
-    if column_exists('listings', 'slug'):
-        # Column already exists, just populate empty slugs
-        generate_slugs(apps, schema_editor)
-    else:
-        # Column doesn't exist - this shouldn't happen since we use AddField
-        pass
+    """Reverse migration - no-op for safety."""
+    pass
 
 
 class Migration(migrations.Migration):
@@ -76,7 +65,7 @@ class Migration(migrations.Migration):
             # Reverse: Drop column
             reverse_sql="ALTER TABLE listings DROP COLUMN IF EXISTS slug;",
         ),
-        # Generate slugs for existing records
+        # Generate slugs for existing records using raw SQL
         migrations.RunPython(generate_slugs, reverse_slugs),
         # Add unique constraint if not exists
         migrations.RunSQL(
