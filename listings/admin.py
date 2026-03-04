@@ -5,9 +5,10 @@ from django.shortcuts import render, redirect
 from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html
-from unfold.admin import ModelAdmin, TabularInline
+from unfold.admin import ModelAdmin, TabularInline, StackedInline
 
 from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityMapping
+from integrations.models import IcalSync
 
 
 @admin.register(City)
@@ -36,6 +37,18 @@ class ListingAmenityMappingInline(TabularInline):
     autocomplete_fields = ['amenity']
 
 
+class IcalSyncInline(StackedInline):
+    """Inline for managing iCal sync configuration within a Listing."""
+    model = IcalSync
+    extra = 0
+    max_num = 1
+    fields = ['platform', 'airbnb_import_url', 'status', 'last_synced_at', 'last_error', 'sync_count']
+    readonly_fields = ['last_synced_at', 'last_error', 'sync_count']
+    classes = ['collapse']
+    verbose_name = "iCal Sync Configuration"
+    verbose_name_plural = "iCal Sync Configuration"
+
+
 @admin.register(Listing)
 class ListingAdmin(ModelAdmin):
     list_display = [
@@ -53,7 +66,7 @@ class ListingAdmin(ModelAdmin):
     list_filter = ['status', 'property_type', 'property_category', 'city', 'is_instant_bookable', 'is_featured', 'cancellation_policy']
     search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
     readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
-    inlines = [ListingImageInline, ListingAmenityMappingInline]
+    inlines = [ListingImageInline, ListingAmenityMappingInline, IcalSyncInline]
     actions = ['approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
     autocomplete_fields = ['host', 'city']
     list_editable = ['is_featured']
