@@ -2,10 +2,21 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.sites.models import Site
 from django.utils import timezone
 from unfold.admin import ModelAdmin
 
+from allauth.account.models import EmailAddress
+from allauth.socialaccount.models import SocialAccount, SocialApp, SocialToken
+
 from .models import User
+
+# Hide django-allauth and sites models from admin
+admin.site.unregister(SocialAccount)
+admin.site.unregister(SocialApp)
+admin.site.unregister(SocialToken)
+admin.site.unregister(EmailAddress)
+admin.site.unregister(Site)
 
 
 @admin.register(User)
