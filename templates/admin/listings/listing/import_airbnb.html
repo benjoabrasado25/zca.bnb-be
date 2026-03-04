@@ -3,15 +3,15 @@
 
 {% block content %}
 <div style="max-width: 800px; margin: 0 auto; padding: 20px;">
-    <h1 style="margin-bottom: 20px;">Import Listings from Airbnb</h1>
+    <h1 style="margin-bottom: 20px;">Sync Listings from Airbnb</h1>
 
-    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin-top: 0;">How it works:</h3>
-        <ol style="margin-bottom: 0;">
-            <li>Enter one or more Airbnb listing URLs below (one per line)</li>
-            <li>Click "Start Import" to begin the sync process</li>
-            <li>APIFY will scrape the listing data (usually takes 1-5 minutes)</li>
-            <li>Listings will be created/updated automatically with all details, photos, and amenities</li>
+    <div style="background: #e8f4fd; border: 1px solid #b8daff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0; color: #004085;">How it works:</h3>
+        <ol style="margin-bottom: 0; color: #004085;">
+            <li>Paste one or more Airbnb listing URLs below (one per line)</li>
+            <li>Click "Start Sync" - the process takes 1-5 minutes</li>
+            <li>Listings are automatically created with all details, photos, amenities, and reviews</li>
+            <li>If a listing already exists (same Airbnb ID), it will be updated</li>
         </ol>
     </div>
 
@@ -20,42 +20,49 @@
 
         <div style="margin-bottom: 20px;">
             <label for="id_airbnb_urls" style="display: block; font-weight: bold; margin-bottom: 8px;">
-                {{ form.airbnb_urls.label }}
+                Airbnb URLs
             </label>
             <textarea
                 name="airbnb_urls"
                 id="id_airbnb_urls"
                 rows="10"
-                style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-family: monospace;"
+                style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-family: monospace; font-size: 13px;"
                 placeholder="https://www.airbnb.com/rooms/12345678
 https://www.airbnb.com/rooms/87654321
 https://www.airbnb.com/rooms/11223344"
+                required
             >{{ form.airbnb_urls.value|default:'' }}</textarea>
-            {% if form.airbnb_urls.help_text %}
             <p style="color: #6c757d; font-size: 0.875rem; margin-top: 5px;">
-                {{ form.airbnb_urls.help_text }}
+                Enter one Airbnb listing URL per line. Only URLs containing "airbnb.com" will be processed.
             </p>
-            {% endif %}
-            {% if form.airbnb_urls.errors %}
-            <p style="color: #dc3545; margin-top: 5px;">
-                {{ form.airbnb_urls.errors }}
-            </p>
-            {% endif %}
         </div>
 
         <div style="display: flex; gap: 10px;">
-            <button type="submit" style="background: #417690; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
-                Start Import
+            <button type="submit" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                Start Sync
             </button>
-            <a href="{% url 'admin:listings_listing_changelist' %}" style="background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 4px; font-size: 14px;">
+            <a href="{% url 'admin:listings_listing_changelist' %}" style="background: #6c757d; color: white; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-size: 14px; display: inline-flex; align-items: center;">
                 Cancel
             </a>
         </div>
     </form>
 
     <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
-        <strong>Note:</strong> Make sure <code>APIFY_TOKEN</code> is configured in your environment variables.
-        You can get an API token from <a href="https://console.apify.com/account#/integrations" target="_blank">Apify Console</a>.
+        <strong>Note:</strong> Make sure <code>APIFY_TOKEN</code> is configured in your Railway environment variables.
+        Get your API token from <a href="https://console.apify.com/account#/integrations" target="_blank">Apify Console</a>.
+    </div>
+
+    <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">
+        <strong>What gets synced:</strong>
+        <ul style="margin-bottom: 0; margin-top: 10px;">
+            <li>Title, description, property type</li>
+            <li>Location, coordinates, city</li>
+            <li>Price, capacity (guests, bedrooms, beds, bathrooms)</li>
+            <li>All photos (uploaded to your storage)</li>
+            <li>Amenities</li>
+            <li>Ratings and reviews</li>
+            <li>House rules, check-in/out times</li>
+        </ul>
     </div>
 </div>
 {% endblock %}

@@ -88,39 +88,41 @@ class ListingAdmin(ModelAdmin):
             form = AirbnbImportForm(request.POST)
             if form.is_valid():
                 urls_text = form.cleaned_data['airbnb_urls']
-                urls = [url.strip() for url in urls_text.strip().split('\n') if url.strip()]
+                urls = [url.strip() for url in urls_text.strip().split('\n') if url.strip() and 'airbnb.com' in url]
 
                 if not urls:
-                    messages.error(request, 'Please enter at least one Airbnb URL.')
+                    messages.error(request, 'Please enter at least one valid Airbnb URL.')
                     return redirect('admin:listings_listing_import_airbnb')
 
-                # Try to import using APIFY
                 try:
-                    from integrations.apify_service import ApifyService
+                    from integrations.apify_service import AirbnbSyncService
 
                     # Check if APIFY is configured
-                    if not ApifyService.get_api_token():
+                    if not AirbnbSyncService.get_api_token():
                         messages.error(request, 'APIFY_TOKEN is not configured. Please add it to your environment variables.')
                         return redirect('admin:listings_listing_import_airbnb')
 
-                    # Start sync job
-                    run_id, error = ApifyService.start_sync_job(urls)
+                    # Run sync and wait for results (this may take 1-5 minutes)
+                    results = AirbnbSyncService.sync_and_wait(urls, host=request.user, timeout=300)
 
-                    if error:
-                        messages.error(request, f'Failed to start import: {error}')
+                    if results['success']:
+                        msg = f"Successfully synced {results['created']} new listing(s)"
+                        if results['updated']:
+                            msg += f" and updated {results['updated']} existing listing(s)"
+                        messages.success(request, msg)
                     else:
-                        messages.success(
-                            request,
-                            f'Import job started for {len(urls)} URL(s). Job ID: {run_id}. '
-                            f'The listings will appear once the job completes (usually 1-5 minutes). '
-                            f'Check "Integrations > APIFY Sync Jobs" for status.'
-                        )
-                        return redirect('admin:listings_listing_changelist')
+                        if results['errors']:
+                            for error in results['errors']:
+                                messages.error(request, error)
+                        else:
+                            messages.error(request, 'Sync failed. Check Airbnb Sync Jobs for details.')
 
-                except ImportError:
-                    messages.error(request, 'APIFY integration module not found.')
+                    return redirect('admin:listings_listing_changelist')
+
+                except ImportError as e:
+                    messages.error(request, f'Integration module error: {str(e)}')
                 except Exception as e:
-                    messages.error(request, f'Error starting import: {str(e)}')
+                    messages.error(request, f'Error during sync: {str(e)}')
 
                 return redirect('admin:listings_listing_import_airbnb')
         else:
@@ -129,7 +131,7 @@ class ListingAdmin(ModelAdmin):
         context = {
             **self.admin_site.each_context(request),
             'form': form,
-            'title': 'Import from Airbnb',
+            'title': 'Sync from Airbnb',
             'opts': self.model._meta,
         }
         return render(request, 'admin/listings/listing/import_airbnb.html', context)
