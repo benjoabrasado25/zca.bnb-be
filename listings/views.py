@@ -1,11 +1,14 @@
-"""Listing views for ZCA BnB with proper permissions."""
+"""Listing views for StaySuitePH with proper permissions."""
 
+from datetime import datetime
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from bookings.models import Booking, BlockedDate
 from bookings.services import BookingService
 from .models import City, Listing, ListingImage, ListingAmenity
 from .serializers import (
@@ -58,6 +61,9 @@ class ListingFilter(filters.FilterSet):
     min_price = filters.NumberFilter(field_name='price_per_night', lookup_expr='gte')
     max_price = filters.NumberFilter(field_name='price_per_night', lookup_expr='lte')
     min_guests = filters.NumberFilter(field_name='max_guests', lookup_expr='gte')
+    guests = filters.NumberFilter(field_name='max_guests', lookup_expr='gte')  # Alias for min_guests
+    adults = filters.NumberFilter(method='filter_by_total_guests')
+    children = filters.NumberFilter(method='filter_by_total_guests')
     bedrooms = filters.NumberFilter(field_name='bedrooms', lookup_expr='gte')
     beds = filters.NumberFilter(field_name='beds', lookup_expr='gte')
     bathrooms = filters.NumberFilter(field_name='bathrooms', lookup_expr='gte')
@@ -69,13 +75,81 @@ class ListingFilter(filters.FilterSet):
     instant_bookable = filters.BooleanFilter(field_name='is_instant_bookable')
     featured = filters.BooleanFilter(field_name='is_featured')
 
+    # Date availability filters (support both snake_case and camelCase)
+    check_in = filters.DateFilter(method='filter_availability')
+    check_out = filters.DateFilter(method='filter_availability')
+    checkIn = filters.DateFilter(method='filter_availability')
+    checkOut = filters.DateFilter(method='filter_availability')
+
     class Meta:
         model = Listing
         fields = [
             'city', 'city_name', 'province', 'property_type', 'property_category',
-            'min_price', 'max_price', 'min_guests',
+            'min_price', 'max_price', 'min_guests', 'guests', 'adults', 'children',
             'bedrooms', 'beds', 'bathrooms', 'instant_bookable', 'featured',
+            'check_in', 'check_out', 'checkIn', 'checkOut',
         ]
+
+    def filter_by_total_guests(self, queryset, name, value):
+        """Filter by total guests (adults + children)."""
+        adults = int(self.data.get('adults', 0) or 0)
+        children = int(self.data.get('children', 0) or 0)
+        total_guests = adults + children
+
+        if total_guests > 0:
+            return queryset.filter(max_guests__gte=total_guests)
+        return queryset
+
+    def filter_availability(self, queryset, name, value):
+        """
+        Filter listings by date availability.
+        Excludes listings that have conflicting bookings or blocked dates.
+        """
+        check_in = self.data.get('check_in') or self.data.get('checkIn')
+        check_out = self.data.get('check_out') or self.data.get('checkOut')
+
+        if not check_in or not check_out:
+            return queryset
+
+        # Parse dates if they're strings
+        if isinstance(check_in, str):
+            check_in = datetime.strptime(check_in, '%Y-%m-%d').date()
+        if isinstance(check_out, str):
+            check_out = datetime.strptime(check_out, '%Y-%m-%d').date()
+
+        # Find listings with conflicting bookings
+        conflicting_booking_listings = Booking.objects.filter(
+            status__in=[Booking.Status.CONFIRMED, Booking.Status.PENDING],
+            check_in__lt=check_out,
+            check_out__gt=check_in,
+        ).values_list('listing_id', flat=True)
+
+        # Find listings with conflicting blocked dates
+        conflicting_blocked_listings = BlockedDate.objects.filter(
+            start_date__lt=check_out,
+            end_date__gt=check_in,
+        ).values_list('listing_id', flat=True)
+
+        # Exclude listings with conflicts
+        excluded_ids = set(conflicting_booking_listings) | set(conflicting_blocked_listings)
+
+        # Also check the booked_dates JSON field on listings
+        for listing in queryset:
+            if listing.booked_dates:
+                for period in listing.booked_dates:
+                    period_start = period.get('start')
+                    period_end = period.get('end')
+                    if period_start and period_end:
+                        if isinstance(period_start, str):
+                            period_start = datetime.strptime(period_start, '%Y-%m-%d').date()
+                        if isinstance(period_end, str):
+                            period_end = datetime.strptime(period_end, '%Y-%m-%d').date()
+                        # Check overlap
+                        if check_in < period_end and check_out > period_start:
+                            excluded_ids.add(listing.id)
+                            break
+
+        return queryset.exclude(id__in=excluded_ids)
 
 
 class ListingViewSet(viewsets.ModelViewSet):
