@@ -1,11 +1,23 @@
 """Listing admin configuration with approval workflow."""
 
-from django.contrib import admin
+from django import forms
+from django.contrib import admin, messages
+from django.shortcuts import render, redirect
+from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 
 from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityMapping
+
+
+class AirbnbImportForm(forms.Form):
+    """Form for importing listings from Airbnb URLs."""
+    airbnb_urls = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 10, 'placeholder': 'Enter Airbnb URLs, one per line\n\nhttps://www.airbnb.com/rooms/12345678\nhttps://www.airbnb.com/rooms/87654321'}),
+        label='Airbnb URLs',
+        help_text='Enter one Airbnb listing URL per line. The system will scrape and import the listing data.',
+    )
 
 
 @admin.register(City)
@@ -45,15 +57,82 @@ class ListingAdmin(ModelAdmin):
         'status',
         'is_featured',
         'is_instant_bookable',
+        'airbnb_synced',
         'created_at',
     ]
     list_filter = ['status', 'property_type', 'property_category', 'city', 'is_instant_bookable', 'is_featured', 'cancellation_policy']
-    search_fields = ['title', 'description', 'address', 'host__username', 'host__email']
-    readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at']
+    search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
+    readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
     inlines = [ListingImageInline, ListingAmenityMappingInline]
-    actions = ['approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings']
+    actions = ['approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
     autocomplete_fields = ['host', 'city']
     list_editable = ['is_featured']
+    change_list_template = 'admin/listings/listing/change_list.html'
+
+    def airbnb_synced(self, obj):
+        if obj.airbnb_id:
+            return format_html('<span style="color: green;">&#10003; {}</span>', obj.airbnb_id)
+        return format_html('<span style="color: gray;">-</span>')
+    airbnb_synced.short_description = 'Airbnb'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('import-airbnb/', self.admin_site.admin_view(self.import_airbnb_view), name='listings_listing_import_airbnb'),
+        ]
+        return custom_urls + urls
+
+    def import_airbnb_view(self, request):
+        """Custom admin view for importing listings from Airbnb."""
+        if request.method == 'POST':
+            form = AirbnbImportForm(request.POST)
+            if form.is_valid():
+                urls_text = form.cleaned_data['airbnb_urls']
+                urls = [url.strip() for url in urls_text.strip().split('\n') if url.strip()]
+
+                if not urls:
+                    messages.error(request, 'Please enter at least one Airbnb URL.')
+                    return redirect('admin:listings_listing_import_airbnb')
+
+                # Try to import using APIFY
+                try:
+                    from integrations.apify_service import ApifyService
+
+                    # Check if APIFY is configured
+                    if not ApifyService.get_api_token():
+                        messages.error(request, 'APIFY_TOKEN is not configured. Please add it to your environment variables.')
+                        return redirect('admin:listings_listing_import_airbnb')
+
+                    # Start sync job
+                    run_id, error = ApifyService.start_sync_job(urls)
+
+                    if error:
+                        messages.error(request, f'Failed to start import: {error}')
+                    else:
+                        messages.success(
+                            request,
+                            f'Import job started for {len(urls)} URL(s). Job ID: {run_id}. '
+                            f'The listings will appear once the job completes (usually 1-5 minutes). '
+                            f'Check "Integrations > APIFY Sync Jobs" for status.'
+                        )
+                        return redirect('admin:listings_listing_changelist')
+
+                except ImportError:
+                    messages.error(request, 'APIFY integration module not found.')
+                except Exception as e:
+                    messages.error(request, f'Error starting import: {str(e)}')
+
+                return redirect('admin:listings_listing_import_airbnb')
+        else:
+            form = AirbnbImportForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'form': form,
+            'title': 'Import from Airbnb',
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/listings/listing/import_airbnb.html', context)
 
     fieldsets = (
         ('Basic Info', {
@@ -80,6 +159,10 @@ class ListingAdmin(ModelAdmin):
         }),
         ('Settings', {
             'fields': ('is_instant_bookable', 'is_featured', 'ical_export_token'),
+        }),
+        ('Airbnb Integration', {
+            'fields': ('airbnb_id', 'airbnb_url', 'booking_url', 'last_synced'),
+            'classes': ('collapse',),
         }),
         ('Review Status', {
             'fields': ('submitted_for_review_at', 'reviewed_at', 'reviewed_by', 'rejection_reason'),
@@ -121,6 +204,36 @@ class ListingAdmin(ModelAdmin):
     def unfeature_listings(self, request, queryset):
         count = queryset.update(is_featured=False)
         self.message_user(request, f'{count} listing(s) unfeatured.')
+
+    @admin.action(description='Re-sync selected listings from Airbnb')
+    def sync_from_airbnb(self, request, queryset):
+        """Re-sync selected listings that have Airbnb URLs."""
+        urls = []
+        for listing in queryset:
+            if listing.airbnb_url:
+                urls.append(listing.airbnb_url)
+            elif listing.airbnb_id:
+                urls.append(f'https://www.airbnb.com/rooms/{listing.airbnb_id}')
+
+        if not urls:
+            self.message_user(request, 'No listings with Airbnb URLs/IDs selected.', level=messages.WARNING)
+            return
+
+        try:
+            from integrations.apify_service import ApifyService
+
+            if not ApifyService.get_api_token():
+                self.message_user(request, 'APIFY_TOKEN is not configured.', level=messages.ERROR)
+                return
+
+            run_id, error = ApifyService.start_sync_job(urls)
+
+            if error:
+                self.message_user(request, f'Failed to start sync: {error}', level=messages.ERROR)
+            else:
+                self.message_user(request, f'Sync job started for {len(urls)} listing(s). Job ID: {run_id}')
+        except Exception as e:
+            self.message_user(request, f'Error: {str(e)}', level=messages.ERROR)
 
 
 @admin.register(ListingAmenity)

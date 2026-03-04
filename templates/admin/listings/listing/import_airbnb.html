@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+    <h1 style="margin-bottom: 20px;">Import Listings from Airbnb</h1>
+
+    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <h3 style="margin-top: 0;">How it works:</h3>
+        <ol style="margin-bottom: 0;">
+            <li>Enter one or more Airbnb listing URLs below (one per line)</li>
+            <li>Click "Start Import" to begin the sync process</li>
+            <li>APIFY will scrape the listing data (usually takes 1-5 minutes)</li>
+            <li>Listings will be created/updated automatically with all details, photos, and amenities</li>
+        </ol>
+    </div>
+
+    <form method="post" style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px;">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 20px;">
+            <label for="id_airbnb_urls" style="display: block; font-weight: bold; margin-bottom: 8px;">
+                {{ form.airbnb_urls.label }}
+            </label>
+            <textarea
+                name="airbnb_urls"
+                id="id_airbnb_urls"
+                rows="10"
+                style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-family: monospace;"
+                placeholder="https://www.airbnb.com/rooms/12345678
+https://www.airbnb.com/rooms/87654321
+https://www.airbnb.com/rooms/11223344"
+            >{{ form.airbnb_urls.value|default:'' }}</textarea>
+            {% if form.airbnb_urls.help_text %}
+            <p style="color: #6c757d; font-size: 0.875rem; margin-top: 5px;">
+                {{ form.airbnb_urls.help_text }}
+            </p>
+            {% endif %}
+            {% if form.airbnb_urls.errors %}
+            <p style="color: #dc3545; margin-top: 5px;">
+                {{ form.airbnb_urls.errors }}
+            </p>
+            {% endif %}
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" style="background: #417690; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">
+                Start Import
+            </button>
+            <a href="{% url 'admin:listings_listing_changelist' %}" style="background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 4px; font-size: 14px;">
+                Cancel
+            </a>
+        </div>
+    </form>
+
+    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
+        <strong>Note:</strong> Make sure <code>APIFY_TOKEN</code> is configured in your environment variables.
+        You can get an API token from <a href="https://console.apify.com/account#/integrations" target="_blank">Apify Console</a>.
+    </div>
+</div>
+{% endblock %}
