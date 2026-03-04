@@ -1,7 +1,33 @@
-"""Add Airbnb sync, iCal, ratings, and additional listing fields."""
+"""Add Airbnb sync, iCal, ratings, and additional listing fields.
+
+This migration checks if fields already exist before adding them.
+"""
 
 import uuid
-from django.db import migrations, models
+from django.db import migrations, models, connection
+
+
+def field_exists(table_name, field_name):
+    """Check if a field exists in a table."""
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = %s AND column_name = %s
+        """, [table_name, field_name])
+        return cursor.fetchone() is not None
+
+
+class ConditionalAddField(migrations.AddField):
+    """AddField that only runs if the field doesn't exist."""
+
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        if not field_exists(self.model_name + 's', self.name):
+            super().database_forwards(app_label, schema_editor, from_state, to_state)
+
+    def database_backwards(self, app_label, schema_editor, from_state, to_state):
+        if field_exists(self.model_name + 's', self.name):
+            super().database_backwards(app_label, schema_editor, from_state, to_state)
 
 
 class Migration(migrations.Migration):
@@ -11,124 +37,102 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Airbnb Integration
-        migrations.AddField(
-            model_name='listing',
-            name='airbnb_id',
-            field=models.CharField(blank=True, db_index=True, help_text='Airbnb listing ID', max_length=50),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='airbnb_url',
-            field=models.URLField(blank=True, help_text='Full Airbnb listing URL', max_length=500),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='booking_url',
-            field=models.URLField(blank=True, help_text='External booking URL', max_length=500),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='last_synced',
-            field=models.DateTimeField(blank=True, help_text='Last Apify sync timestamp', null=True),
-        ),
+        # Use raw SQL to add fields only if they don't exist
+        migrations.RunSQL(
+            sql="""
+            DO $$
+            BEGIN
+                -- Airbnb Integration
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='airbnb_id') THEN
+                    ALTER TABLE listings ADD COLUMN airbnb_id VARCHAR(50) DEFAULT '' NOT NULL;
+                    CREATE INDEX IF NOT EXISTS listings_airbnb_id_idx ON listings(airbnb_id);
+                END IF;
 
-        # iCal Integration
-        migrations.AddField(
-            model_name='listing',
-            name='ical_export_token',
-            field=models.UUIDField(default=uuid.uuid4, unique=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='ical_url',
-            field=models.URLField(blank=True, help_text='iCal feed URL for availability sync', max_length=500),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='ical_last_synced',
-            field=models.DateTimeField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='booked_dates',
-            field=models.JSONField(blank=True, default=list, help_text='JSON array of booked date ranges from iCal'),
-        ),
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='airbnb_url') THEN
+                    ALTER TABLE listings ADD COLUMN airbnb_url VARCHAR(500) DEFAULT '' NOT NULL;
+                END IF;
 
-        # Ratings & Reviews
-        migrations.AddField(
-            model_name='listing',
-            name='rating',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='Overall rating 0-5', max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='reviews_count',
-            field=models.PositiveIntegerField(default=0),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='rating_accuracy',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='rating_cleanliness',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='rating_checkin',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='rating_communication',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='rating_location',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='rating_value',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='reviews',
-            field=models.JSONField(blank=True, default=list, help_text='JSON array of review objects'),
-        ),
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='booking_url') THEN
+                    ALTER TABLE listings ADD COLUMN booking_url VARCHAR(500) DEFAULT '' NOT NULL;
+                END IF;
 
-        # Property Highlights
-        migrations.AddField(
-            model_name='listing',
-            name='highlights',
-            field=models.JSONField(blank=True, default=list, help_text='JSON array of property highlights'),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='square_feet',
-            field=models.PositiveIntegerField(blank=True, null=True),
-        ),
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='last_synced') THEN
+                    ALTER TABLE listings ADD COLUMN last_synced TIMESTAMP WITH TIME ZONE NULL;
+                END IF;
 
-        # Check-in Details
-        migrations.AddField(
-            model_name='listing',
-            name='self_checkin',
-            field=models.BooleanField(default=False),
-        ),
-        migrations.AddField(
-            model_name='listing',
-            name='checkin_method',
-            field=models.CharField(blank=True, help_text='e.g., Lockbox, Smart lock, Doorman', max_length=255),
-        ),
+                -- iCal Integration
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='ical_export_token') THEN
+                    ALTER TABLE listings ADD COLUMN ical_export_token UUID DEFAULT gen_random_uuid() NOT NULL UNIQUE;
+                END IF;
 
-        # Add index for airbnb_id
-        migrations.AddIndex(
-            model_name='listing',
-            index=models.Index(fields=['airbnb_id'], name='listings_airbnb__e37e50_idx'),
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='ical_url') THEN
+                    ALTER TABLE listings ADD COLUMN ical_url VARCHAR(500) DEFAULT '' NOT NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='ical_last_synced') THEN
+                    ALTER TABLE listings ADD COLUMN ical_last_synced TIMESTAMP WITH TIME ZONE NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='booked_dates') THEN
+                    ALTER TABLE listings ADD COLUMN booked_dates JSONB DEFAULT '[]'::jsonb NOT NULL;
+                END IF;
+
+                -- Ratings & Reviews
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating') THEN
+                    ALTER TABLE listings ADD COLUMN rating DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='reviews_count') THEN
+                    ALTER TABLE listings ADD COLUMN reviews_count INTEGER DEFAULT 0 NOT NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating_accuracy') THEN
+                    ALTER TABLE listings ADD COLUMN rating_accuracy DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating_cleanliness') THEN
+                    ALTER TABLE listings ADD COLUMN rating_cleanliness DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating_checkin') THEN
+                    ALTER TABLE listings ADD COLUMN rating_checkin DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating_communication') THEN
+                    ALTER TABLE listings ADD COLUMN rating_communication DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating_location') THEN
+                    ALTER TABLE listings ADD COLUMN rating_location DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='rating_value') THEN
+                    ALTER TABLE listings ADD COLUMN rating_value DECIMAL(3,2) NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='reviews') THEN
+                    ALTER TABLE listings ADD COLUMN reviews JSONB DEFAULT '[]'::jsonb NOT NULL;
+                END IF;
+
+                -- Property Highlights
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='highlights') THEN
+                    ALTER TABLE listings ADD COLUMN highlights JSONB DEFAULT '[]'::jsonb NOT NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='square_feet') THEN
+                    ALTER TABLE listings ADD COLUMN square_feet INTEGER NULL;
+                END IF;
+
+                -- Check-in Details
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='self_checkin') THEN
+                    ALTER TABLE listings ADD COLUMN self_checkin BOOLEAN DEFAULT FALSE NOT NULL;
+                END IF;
+
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='checkin_method') THEN
+                    ALTER TABLE listings ADD COLUMN checkin_method VARCHAR(255) DEFAULT '' NOT NULL;
+                END IF;
+            END $$;
+            """,
+            reverse_sql=migrations.RunSQL.noop,
         ),
     ]
