@@ -149,28 +149,43 @@ class ListingDetailSerializer(serializers.ModelSerializer):
 
     def get_booked_dates(self, obj):
         """
-        Get booked date ranges from confirmed/pending bookings.
+        Get booked date ranges from confirmed/pending bookings or listing's JSON field.
 
         Returns a list of objects with 'start' and 'end' date strings.
         """
         from datetime import date
         from bookings.models import Booking
 
-        # Get all confirmed and pending bookings for this listing
+        # First try to get from Booking model
         bookings = Booking.objects.filter(
             listing=obj,
             status__in=[Booking.Status.CONFIRMED, Booking.Status.PENDING],
             check_out__gte=date.today(),
         ).order_by('check_in')
 
-        # Return date ranges
-        return [
-            {
-                'start': booking.check_in.isoformat(),
-                'end': booking.check_out.isoformat(),
-            }
-            for booking in bookings
-        ]
+        if bookings.exists():
+            return [
+                {
+                    'start': booking.check_in.isoformat(),
+                    'end': booking.check_out.isoformat(),
+                }
+                for booking in bookings
+            ]
+
+        # Fallback to listing's booked_dates JSON field (from iCal sync)
+        if obj.booked_dates:
+            # Filter out past dates
+            today = date.today().isoformat()
+            return [
+                {
+                    'start': d.get('start'),
+                    'end': d.get('end'),
+                }
+                for d in obj.booked_dates
+                if d.get('end', '') >= today
+            ]
+
+        return []
 
 
 class ListingCreateUpdateSerializer(serializers.ModelSerializer):

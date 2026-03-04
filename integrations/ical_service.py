@@ -352,6 +352,30 @@ class IcalImportService:
             f"created={created}, updated={updated}, skipped={skipped}, conflicts={conflicts}"
         )
 
+        # Also update the listing's booked_dates JSON field directly (like WordPress)
+        # This ensures availability data is always up to date
+        try:
+            all_booked = []
+            for event in events:
+                if event['status'] == 'CANCELLED':
+                    continue
+                if event['end'] < date.today():
+                    continue
+                all_booked.append({
+                    'start': event['start'].isoformat(),
+                    'end': event['end'].isoformat(),
+                    'summary': event.get('summary', 'Reserved'),
+                })
+
+            # Update listing's booked_dates field
+            listing = ical_sync.listing
+            listing.booked_dates = all_booked
+            listing.ical_last_synced = timezone.now()
+            listing.save(update_fields=['booked_dates', 'ical_last_synced', 'updated_at'])
+            logger.info(f"Updated listing.booked_dates with {len(all_booked)} date ranges")
+        except Exception as e:
+            logger.warning(f"Failed to update listing.booked_dates: {e}")
+
         return created, updated, skipped, conflicts, error_message
 
     @classmethod
