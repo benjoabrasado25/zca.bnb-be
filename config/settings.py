@@ -289,6 +289,9 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 # iCal Sync Settings
 ICAL_SYNC_INTERVAL_HOURS = int(os.environ.get('ICAL_SYNC_INTERVAL_HOURS', 1))
 
+# APIFY Settings (for Airbnb sync)
+APIFY_TOKEN = os.environ.get('APIFY_TOKEN', '')
+
 # Django Allauth Configuration
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
