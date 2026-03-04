@@ -177,8 +177,36 @@ class Listing(models.Model):
     is_instant_bookable = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False, help_text='Featured on homepage')
 
+    # Airbnb Integration
+    airbnb_id = models.CharField(max_length=50, blank=True, db_index=True, help_text='Airbnb listing ID')
+    airbnb_url = models.URLField(max_length=500, blank=True, help_text='Full Airbnb listing URL')
+    booking_url = models.URLField(max_length=500, blank=True, help_text='External booking URL')
+    last_synced = models.DateTimeField(null=True, blank=True, help_text='Last Apify sync timestamp')
+
     # iCal Integration
     ical_export_token = models.UUIDField(default=uuid.uuid4, unique=True)
+    ical_url = models.URLField(max_length=500, blank=True, help_text='iCal feed URL for availability sync')
+    ical_last_synced = models.DateTimeField(null=True, blank=True)
+    booked_dates = models.JSONField(default=list, blank=True, help_text='JSON array of booked date ranges from iCal')
+
+    # Ratings & Reviews
+    rating = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True, help_text='Overall rating 0-5')
+    reviews_count = models.PositiveIntegerField(default=0)
+    rating_accuracy = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_cleanliness = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_checkin = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_communication = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_location = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    rating_value = models.DecimalField(max_digits=3, decimal_places=2, null=True, blank=True)
+    reviews = models.JSONField(default=list, blank=True, help_text='JSON array of review objects')
+
+    # Property Highlights
+    highlights = models.JSONField(default=list, blank=True, help_text='JSON array of property highlights')
+    square_feet = models.PositiveIntegerField(null=True, blank=True)
+
+    # Check-in Details
+    self_checkin = models.BooleanField(default=False)
+    checkin_method = models.CharField(max_length=255, blank=True, help_text='e.g., Lockbox, Smart lock, Doorman')
 
     # Admin approval workflow
     submitted_for_review_at = models.DateTimeField(null=True, blank=True)
@@ -206,6 +234,7 @@ class Listing(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['price_per_night']),
             models.Index(fields=['host', 'status']),
+            models.Index(fields=['airbnb_id']),
         ]
 
     def __str__(self):
