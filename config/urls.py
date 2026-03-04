@@ -39,6 +39,12 @@ urlpatterns = [
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
 
+    # OAuth / Social Authentication
+    path('api/auth/', include('dj_rest_auth.urls')),
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('api/auth/google/', include('users.oauth_urls')),
+    path('accounts/', include('allauth.urls')),
+
     # API endpoints
     path('api/users/', include('users.urls')),
     path('api/listings/', include('listings.urls')),

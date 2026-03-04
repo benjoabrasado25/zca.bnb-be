@@ -12,6 +12,8 @@ dj-database-url>=2.1.0
 
 # Authentication
 djangorestframework-simplejwt>=5.3.1
+django-allauth>=0.61.0
+dj-rest-auth>=5.0.0
 
 # iCal
 icalendar>=5.0.0
