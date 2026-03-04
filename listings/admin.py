@@ -42,20 +42,11 @@ class IcalSyncInline(StackedInline):
     model = IcalSync
     extra = 0
     max_num = 1
-    fields = ['platform', 'airbnb_import_url', 'status', 'sync_now_button', 'last_synced_at', 'last_error', 'sync_count']
-    readonly_fields = ['last_synced_at', 'last_error', 'sync_count', 'sync_now_button']
+    fields = ['platform', 'airbnb_import_url', 'status', 'last_synced_at', 'last_error', 'sync_count']
+    readonly_fields = ['last_synced_at', 'last_error', 'sync_count']
     verbose_name = "iCal Sync Configuration"
     verbose_name_plural = "iCal Sync Configuration"
-
-    def sync_now_button(self, obj):
-        if obj and obj.pk:
-            return format_html(
-                '<a class="button" href="{}sync-ical/{}" style="padding: 8px 16px; background: #2271b1; color: white; text-decoration: none; border-radius: 4px;">Sync Now</a>',
-                obj.listing_id,
-                obj.pk
-            )
-        return "Save first to enable sync"
-    sync_now_button.short_description = "Manual Sync"
+    template = 'admin/listings/listing/ical_sync_inline.html'
 
 
 @admin.register(Listing)
