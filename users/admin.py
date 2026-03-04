@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.sites.models import Site
 from django.utils import timezone
+from django.utils.html import format_html
 from unfold.admin import ModelAdmin
 
 from allauth.account.models import EmailAddress
@@ -12,11 +13,30 @@ from allauth.socialaccount.models import SocialAccount, SocialApp, SocialToken
 from .models import User
 
 # Hide django-allauth and sites models from admin
-admin.site.unregister(SocialAccount)
-admin.site.unregister(SocialApp)
-admin.site.unregister(SocialToken)
-admin.site.unregister(EmailAddress)
-admin.site.unregister(Site)
+try:
+    admin.site.unregister(SocialAccount)
+except admin.sites.NotRegistered:
+    pass
+
+try:
+    admin.site.unregister(SocialApp)
+except admin.sites.NotRegistered:
+    pass
+
+try:
+    admin.site.unregister(SocialToken)
+except admin.sites.NotRegistered:
+    pass
+
+try:
+    admin.site.unregister(EmailAddress)
+except admin.sites.NotRegistered:
+    pass
+
+try:
+    admin.site.unregister(Site)
+except admin.sites.NotRegistered:
+    pass
 
 
 @admin.register(User)
@@ -29,14 +49,45 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         'first_name',
         'last_name',
         'user_type',
-        'host_status',
+        'host_status_display',
         'is_verified',
         'is_staff',
+        'created_at',
     ]
-    list_filter = ['user_type', 'host_status', 'is_verified', 'is_staff', 'is_active']
+    list_filter = ['host_status', 'user_type', 'is_verified', 'is_staff', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering = ['-created_at']
     actions = ['approve_hosts', 'reject_hosts']
+
+    def host_status_display(self, obj):
+        """Display host status with color coding."""
+        colors = {
+            User.HostStatus.NOT_APPLIED: 'gray',
+            User.HostStatus.PENDING: 'orange',
+            User.HostStatus.APPROVED: 'green',
+            User.HostStatus.REJECTED: 'red',
+        }
+        color = colors.get(obj.host_status, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_host_status_display()
+        )
+    host_status_display.short_description = 'Host Status'
+    host_status_display.admin_order_field = 'host_status'
+
+    def get_queryset(self, request):
+        """Order by pending hosts first."""
+        qs = super().get_queryset(request)
+        # Show pending hosts at the top
+        from django.db.models import Case, When, Value, IntegerField
+        return qs.annotate(
+            status_order=Case(
+                When(host_status='pending', then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        ).order_by('status_order', '-created_at')
 
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Profile', {
@@ -49,7 +100,6 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
                 'host_approved_date',
                 'host_rejection_reason',
             ),
-            'classes': ('collapse',),
         }),
     )
 
@@ -59,7 +109,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         }),
     )
 
-    @admin.action(description='Approve selected host applications')
+    @admin.action(description='✅ Approve selected host applications')
     def approve_hosts(self, request, queryset):
         count = queryset.filter(
             host_status=User.HostStatus.PENDING
@@ -70,7 +120,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         )
         self.message_user(request, f'{count} host(s) approved.')
 
-    @admin.action(description='Reject selected host applications')
+    @admin.action(description='❌ Reject selected host applications')
     def reject_hosts(self, request, queryset):
         count = queryset.filter(
             host_status=User.HostStatus.PENDING

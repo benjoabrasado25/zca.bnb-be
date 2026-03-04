@@ -1,14 +1,28 @@
 """Listing admin configuration with approval workflow."""
 
 from django.contrib import admin, messages
+from django.contrib.auth.models import Group
 from django.shortcuts import render, redirect
 from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html
+from rest_framework.authtoken.models import TokenProxy
 from unfold.admin import ModelAdmin, TabularInline, StackedInline
 
 from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityMapping
+from bookings.models import BlockedDate
 from integrations.models import IcalSync
+
+# Hide Groups and Tokens from admin sidebar
+try:
+    admin.site.unregister(Group)
+except admin.sites.NotRegistered:
+    pass
+
+try:
+    admin.site.unregister(TokenProxy)
+except admin.sites.NotRegistered:
+    pass
 
 
 @admin.register(City)
@@ -35,6 +49,15 @@ class ListingAmenityMappingInline(TabularInline):
     model = ListingAmenityMapping
     extra = 0
     autocomplete_fields = ['amenity']
+
+
+class BlockedDateInline(TabularInline):
+    """Inline for managing blocked dates within a Listing."""
+    model = BlockedDate
+    extra = 0
+    fields = ['start_date', 'end_date', 'reason']
+    verbose_name = "Blocked Date"
+    verbose_name_plural = "Blocked Dates (Host-defined unavailable periods)"
 
 
 class IcalSyncInline(StackedInline):
@@ -72,7 +95,7 @@ class ListingAdmin(ModelAdmin):
     list_filter = ['status', 'property_type', 'property_category', 'city', 'is_instant_bookable', 'is_featured', 'cancellation_policy']
     search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
     readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
-    inlines = [ListingImageInline, ListingAmenityMappingInline, IcalSyncInline]
+    inlines = [ListingImageInline, ListingAmenityMappingInline, BlockedDateInline, IcalSyncInline]
     actions = ['approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
     autocomplete_fields = ['host', 'city']
     list_editable = ['is_featured']
