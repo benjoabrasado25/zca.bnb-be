@@ -47,25 +47,39 @@ class UserDetailView(generics.RetrieveAPIView):
 
 
 class BecomeHostView(APIView):
-    """API view for upgrading user to host status."""
+    """API view for applying to become a host (requires admin approval)."""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from django.utils import timezone
+
         user = request.user
-        if user.user_type == User.UserType.HOST:
+
+        # Already an approved host
+        if user.is_host:
             return Response(
-                {'detail': 'You are already a host.'},
+                {'detail': 'You are already an approved host.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if user.user_type == User.UserType.GUEST:
-            user.user_type = User.UserType.BOTH
-        else:
-            user.user_type = User.UserType.HOST
+        # Already pending approval
+        if user.host_status == User.HostStatus.PENDING:
+            return Response(
+                {'detail': 'Your host application is pending approval.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # Submit application for admin approval
+        user.user_type = User.UserType.HOST
+        user.host_status = User.HostStatus.PENDING
+        user.host_application_date = timezone.now()
         user.save()
+
         return Response(
-            {'detail': 'You are now a host!', 'user_type': user.user_type},
+            {
+                'detail': 'Your host application has been submitted and is pending admin approval.',
+                'host_status': user.host_status
+            },
             status=status.HTTP_200_OK
         )
