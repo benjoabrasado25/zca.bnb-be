@@ -57,7 +57,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     list_filter = ['host_status', 'user_type', 'is_verified', 'is_staff', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering = ['-created_at']
-    actions = ['approve_hosts', 'reject_hosts']
+    actions = ['approve_hosts', 'reject_hosts', 'make_host', 'make_guest']
 
     def host_status_display(self, obj):
         """Display host status with color coding."""
@@ -128,3 +128,20 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
             host_status=User.HostStatus.REJECTED,
         )
         self.message_user(request, f'{count} host application(s) rejected.')
+
+    @admin.action(description='🏠 Make selected users a Host')
+    def make_host(self, request, queryset):
+        count = queryset.update(
+            user_type=User.UserType.HOST,
+            host_status=User.HostStatus.APPROVED,
+            host_approved_date=timezone.now(),
+        )
+        self.message_user(request, f'{count} user(s) are now hosts.')
+
+    @admin.action(description='👤 Make selected users a Guest')
+    def make_guest(self, request, queryset):
+        count = queryset.update(
+            user_type=User.UserType.GUEST,
+            host_status=User.HostStatus.NOT_APPLIED,
+        )
+        self.message_user(request, f'{count} user(s) are now guests.')
