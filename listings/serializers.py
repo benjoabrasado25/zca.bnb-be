@@ -37,6 +37,7 @@ class ListingListSerializer(serializers.ModelSerializer):
     host = PublicUserSerializer(read_only=True)
     city = CitySerializer(read_only=True)
     primary_image = serializers.SerializerMethodField()
+    booked_dates = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
@@ -60,6 +61,7 @@ class ListingListSerializer(serializers.ModelSerializer):
             'primary_image',
             'latitude',
             'longitude',
+            'booked_dates',
         ]
 
     def get_primary_image(self, obj):
@@ -72,6 +74,35 @@ class ListingListSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(primary.image.url)
             return primary.image.url
         return None
+
+    def get_booked_dates(self, obj):
+        """Get booked dates for listing card availability display."""
+        from datetime import date
+        from bookings.models import Booking
+
+        # First try Booking model
+        bookings = Booking.objects.filter(
+            listing=obj,
+            status__in=[Booking.Status.CONFIRMED, Booking.Status.PENDING],
+            check_out__gte=date.today(),
+        ).order_by('check_in')
+
+        if bookings.exists():
+            return [
+                {'start': b.check_in.isoformat(), 'end': b.check_out.isoformat()}
+                for b in bookings
+            ]
+
+        # Fallback to JSON field
+        if obj.booked_dates:
+            today = date.today().isoformat()
+            return [
+                {'start': d.get('start'), 'end': d.get('end')}
+                for d in obj.booked_dates
+                if d.get('end', '') >= today
+            ]
+
+        return []
 
 
 class ListingDetailSerializer(serializers.ModelSerializer):
