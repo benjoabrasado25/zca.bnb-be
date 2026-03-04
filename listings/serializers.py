@@ -57,6 +57,8 @@ class ListingListSerializer(serializers.ModelSerializer):
             'is_featured',
             'host',
             'primary_image',
+            'latitude',
+            'longitude',
         ]
 
     def get_primary_image(self, obj):
