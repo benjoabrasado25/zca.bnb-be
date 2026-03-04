@@ -40,13 +40,19 @@ class ListingAmenityMappingInline(TabularInline):
 class IcalSyncInline(StackedInline):
     """Inline for managing iCal sync configuration within a Listing."""
     model = IcalSync
-    extra = 0
+    extra = 1  # Show one empty form to add new iCal sync
     max_num = 1
     fields = ['platform', 'airbnb_import_url', 'status', 'last_synced_at', 'last_error', 'sync_count']
     readonly_fields = ['last_synced_at', 'last_error', 'sync_count']
     verbose_name = "iCal Sync Configuration"
     verbose_name_plural = "iCal Sync Configuration"
     template = 'admin/listings/listing/ical_sync_inline.html'
+
+    def get_extra(self, request, obj=None, **kwargs):
+        """Show 1 extra form only if no IcalSync exists for this listing."""
+        if obj and IcalSync.objects.filter(listing=obj).exists():
+            return 0
+        return 1
 
 
 @admin.register(Listing)
@@ -90,22 +96,33 @@ class ListingAdmin(ModelAdmin):
         """Manually trigger iCal sync for a listing."""
         from integrations.models import IcalSync
         from integrations.ical_service import IcalSyncService
+        import logging
+        logger = logging.getLogger(__name__)
 
         try:
             ical_sync = IcalSync.objects.get(pk=ical_sync_id, listing_id=listing_id)
+            logger.info(f"Manual sync triggered: listing={listing_id}, ical_sync={ical_sync_id}, url={ical_sync.airbnb_import_url}")
+
+            if not ical_sync.airbnb_import_url:
+                messages.error(request, 'No iCal URL configured. Please add the Airbnb iCal export URL first.')
+                return redirect('admin:listings_listing_change', listing_id)
 
             # Run the sync
             service = IcalSyncService()
             success, message = service.sync(ical_sync)
 
             if success:
-                messages.success(request, f'iCal sync completed: {message}')
+                # Also show the number of bookings now in the database
+                from bookings.models import Booking
+                booking_count = Booking.objects.filter(listing_id=listing_id, status='confirmed').count()
+                messages.success(request, f'iCal sync completed: {message}. Total confirmed bookings: {booking_count}')
             else:
                 messages.error(request, f'iCal sync failed: {message}')
 
         except IcalSync.DoesNotExist:
             messages.error(request, 'iCal sync configuration not found.')
         except Exception as e:
+            logger.exception(f"Error during iCal sync: {e}")
             messages.error(request, f'Error during sync: {str(e)}')
 
         return redirect('admin:listings_listing_change', listing_id)

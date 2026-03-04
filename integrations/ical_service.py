@@ -444,7 +444,9 @@ class IcalSyncService:
         Returns:
             Tuple of (success, message)
         """
+        logger.info(f"IcalSyncService.sync called for listing={ical_sync.listing_id}, url={ical_sync.airbnb_import_url}")
         created, updated, skipped, conflicts, error = IcalImportService.sync_ical(ical_sync)
+        logger.info(f"IcalSyncService.sync result: created={created}, updated={updated}, skipped={skipped}, conflicts={conflicts}, error={error}")
 
         # Determine log status
         if error:
