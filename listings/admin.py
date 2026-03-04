@@ -25,14 +25,14 @@ class CityAdmin(ModelAdmin):
 
 class ListingImageInline(TabularInline):
     model = ListingImage
-    extra = 3
+    extra = 0
     fields = ['image', 'caption', 'is_primary', 'order']
     ordering = ['order']
 
 
 class ListingAmenityMappingInline(TabularInline):
     model = ListingAmenityMapping
-    extra = 3
+    extra = 0
     autocomplete_fields = ['amenity']
 
 
