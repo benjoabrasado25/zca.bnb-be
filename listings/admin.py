@@ -1,6 +1,5 @@
 """Listing admin configuration with approval workflow."""
 
-from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import render, redirect
 from django.urls import path
@@ -9,15 +8,6 @@ from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 
 from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityMapping
-
-
-class AirbnbImportForm(forms.Form):
-    """Form for importing listings from Airbnb URLs."""
-    airbnb_urls = forms.CharField(
-        widget=forms.Textarea(attrs={'rows': 10, 'placeholder': 'Enter Airbnb URLs, one per line\n\nhttps://www.airbnb.com/rooms/12345678\nhttps://www.airbnb.com/rooms/87654321'}),
-        label='Airbnb URLs',
-        help_text='Enter one Airbnb listing URL per line. The system will scrape and import the listing data.',
-    )
 
 
 @admin.register(City)
@@ -83,56 +73,80 @@ class ListingAdmin(ModelAdmin):
         return custom_urls + urls
 
     def import_airbnb_view(self, request):
-        """Custom admin view for importing listings from Airbnb."""
-        if request.method == 'POST':
-            form = AirbnbImportForm(request.POST)
-            if form.is_valid():
-                urls_text = form.cleaned_data['airbnb_urls']
-                urls = [url.strip() for url in urls_text.strip().split('\n') if url.strip() and 'airbnb.com' in url]
+        """Sync listings from Airbnb - simple page like WordPress plugin."""
+        from integrations.apify_service import AirbnbSyncService
 
-                if not urls:
-                    messages.error(request, 'Please enter at least one valid Airbnb URL.')
-                    return redirect('admin:listings_listing_import_airbnb')
+        apify_configured = bool(AirbnbSyncService.get_api_token())
+        last_sync = None
 
-                try:
-                    from integrations.apify_service import AirbnbSyncService
-
-                    # Check if APIFY is configured
-                    if not AirbnbSyncService.get_api_token():
-                        messages.error(request, 'APIFY_TOKEN is not configured. Please add it to your environment variables.')
-                        return redirect('admin:listings_listing_import_airbnb')
-
-                    # Run sync and wait for results (this may take 1-5 minutes)
-                    results = AirbnbSyncService.sync_and_wait(urls, host=request.user, timeout=300)
-
-                    if results['success']:
-                        msg = f"Successfully synced {results['created']} new listing(s)"
-                        if results['updated']:
-                            msg += f" and updated {results['updated']} existing listing(s)"
-                        messages.success(request, msg)
-                    else:
-                        if results['errors']:
-                            for error in results['errors']:
-                                messages.error(request, error)
-                        else:
-                            messages.error(request, 'Sync failed. Check Airbnb Sync Jobs for details.')
-
-                    return redirect('admin:listings_listing_changelist')
-
-                except ImportError as e:
-                    messages.error(request, f'Integration module error: {str(e)}')
-                except Exception as e:
-                    messages.error(request, f'Error during sync: {str(e)}')
-
+        # Handle sync all existing listings
+        if request.method == 'POST' and request.GET.get('sync_all'):
+            if not apify_configured:
+                messages.error(request, 'APIFY_TOKEN is not configured.')
                 return redirect('admin:listings_listing_import_airbnb')
-        else:
-            form = AirbnbImportForm()
+
+            # Get all listings with airbnb_url
+            existing = Listing.objects.exclude(airbnb_url='').exclude(airbnb_url__isnull=True)
+            urls = [l.airbnb_url for l in existing if l.airbnb_url]
+
+            if not urls:
+                messages.warning(request, 'No existing listings with Airbnb URLs found.')
+                return redirect('admin:listings_listing_import_airbnb')
+
+            try:
+                results = AirbnbSyncService.sync_and_wait(urls, host=request.user, timeout=600)
+                if results['success']:
+                    messages.success(request, f"Synced {results['updated']} existing listing(s).")
+                else:
+                    for error in results.get('errors', []):
+                        messages.error(request, error)
+            except Exception as e:
+                messages.error(request, f'Error: {str(e)}')
+
+            return redirect('admin:listings_listing_import_airbnb')
+
+        # Handle new URL sync
+        if request.method == 'POST' and request.POST.get('airbnb_urls'):
+            if not apify_configured:
+                messages.error(request, 'APIFY_TOKEN is not configured.')
+                return redirect('admin:listings_listing_import_airbnb')
+
+            urls_text = request.POST.get('airbnb_urls', '')
+            urls = [url.strip() for url in urls_text.strip().split('\n') if url.strip() and 'airbnb.com' in url]
+
+            if not urls:
+                messages.error(request, 'Please enter at least one valid Airbnb URL.')
+                return redirect('admin:listings_listing_import_airbnb')
+
+            try:
+                results = AirbnbSyncService.sync_and_wait(urls, host=request.user, timeout=300)
+
+                if results['success']:
+                    msg = f"Successfully synced {results['created']} new listing(s)"
+                    if results['updated']:
+                        msg += f" and updated {results['updated']} existing listing(s)"
+                    messages.success(request, msg)
+                    return redirect('admin:listings_listing_changelist')
+                else:
+                    for error in results.get('errors', []):
+                        messages.error(request, error)
+
+            except Exception as e:
+                messages.error(request, f'Error during sync: {str(e)}')
+
+            return redirect('admin:listings_listing_import_airbnb')
+
+        # Get last sync time
+        last_synced = Listing.objects.exclude(last_synced__isnull=True).order_by('-last_synced').first()
+        if last_synced and last_synced.last_synced:
+            last_sync = last_synced.last_synced.strftime('%b %d, %Y %I:%M %p')
 
         context = {
             **self.admin_site.each_context(request),
-            'form': form,
-            'title': 'Sync from Airbnb',
+            'title': 'Sync Listings from Airbnb',
             'opts': self.model._meta,
+            'apify_configured': apify_configured,
+            'last_sync': last_sync,
         }
         return render(request, 'admin/listings/listing/import_airbnb.html', context)
 

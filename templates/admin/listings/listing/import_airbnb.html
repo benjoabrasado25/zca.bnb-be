@@ -1,68 +1,173 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
 
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .zca-sync-container {
+        max-width: 900px;
+    }
+    .zca-sync-section {
+        background: #fff;
+        border: 1px solid #ccd0d4;
+        border-radius: 4px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .zca-sync-section h2 {
+        margin-top: 0;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .zca-sync-section textarea {
+        width: 100%;
+        font-family: monospace;
+        font-size: 13px;
+    }
+    .zca-progress-bar {
+        width: 100%;
+        height: 20px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 15px 0;
+    }
+    .zca-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #28a745, #20c997);
+        width: 0%;
+        transition: width 0.5s ease;
+    }
+    .zca-progress-status {
+        text-align: center;
+        color: #666;
+        font-style: italic;
+    }
+    .zca-last-sync {
+        color: #666;
+        font-style: italic;
+        margin-top: 10px;
+    }
+    .button-primary {
+        background: #2271b1 !important;
+        border-color: #2271b1 !important;
+        color: #fff !important;
+        padding: 6px 16px !important;
+        font-size: 14px !important;
+    }
+    .button-secondary {
+        background: #f6f7f7 !important;
+        border-color: #8c8f94 !important;
+        color: #2c3338 !important;
+        padding: 6px 16px !important;
+    }
+    #zca-sync-results {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 4px;
+    }
+    #zca-sync-results.success {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    #zca-sync-results.error {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="max-width: 800px; margin: 0 auto; padding: 20px;">
-    <h1 style="margin-bottom: 20px;">Sync Listings from Airbnb</h1>
+<div class="zca-sync-container">
+    <h1>Sync Listings from Airbnb</h1>
 
-    <div style="background: #e8f4fd; border: 1px solid #b8daff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-        <h3 style="margin-top: 0; color: #004085;">How it works:</h3>
-        <ol style="margin-bottom: 0; color: #004085;">
-            <li>Paste one or more Airbnb listing URLs below (one per line)</li>
-            <li>Click "Start Sync" - the process takes 1-5 minutes</li>
-            <li>Listings are automatically created with all details, photos, amenities, and reviews</li>
-            <li>If a listing already exists (same Airbnb ID), it will be updated</li>
-        </ol>
+    {% if not apify_configured %}
+    <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+        <strong>Warning:</strong> APIFY_TOKEN is not configured. Please add it to your environment variables.
+        <a href="https://console.apify.com/account#/integrations" target="_blank">Get your token here</a>.
     </div>
+    {% endif %}
 
-    <form method="post" style="background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px;">
-        {% csrf_token %}
+    <!-- Import New Listings -->
+    <div class="zca-sync-section">
+        <h2>Import New Listings</h2>
+        <p>Paste Airbnb listing URLs below (one per line) to import or update listings.</p>
 
-        <div style="margin-bottom: 20px;">
-            <label for="id_airbnb_urls" style="display: block; font-weight: bold; margin-bottom: 8px;">
-                Airbnb URLs
-            </label>
-            <textarea
-                name="airbnb_urls"
-                id="id_airbnb_urls"
-                rows="10"
-                style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-family: monospace; font-size: 13px;"
-                placeholder="https://www.airbnb.com/rooms/12345678
-https://www.airbnb.com/rooms/87654321
-https://www.airbnb.com/rooms/11223344"
-                required
-            >{{ form.airbnb_urls.value|default:'' }}</textarea>
-            <p style="color: #6c757d; font-size: 0.875rem; margin-top: 5px;">
-                Enter one Airbnb listing URL per line. Only URLs containing "airbnb.com" will be processed.
+        <form id="zca-sync-form" method="post">
+            {% csrf_token %}
+            <textarea id="zca-airbnb-urls" name="airbnb_urls" rows="10" placeholder="https://www.airbnb.com/rooms/12345678
+https://www.airbnb.com/rooms/87654321" {% if not apify_configured %}disabled{% endif %}></textarea>
+            <p style="color: #666; font-size: 13px;">Enter one Airbnb listing URL per line</p>
+
+            <p>
+                <button type="submit" id="zca-sync-btn" class="button-primary" {% if not apify_configured %}disabled{% endif %}>
+                    Sync Now
+                </button>
             </p>
+        </form>
+
+        <div id="zca-sync-progress" style="display: none;">
+            <div class="zca-progress-bar">
+                <div class="zca-progress-fill" id="progress-fill"></div>
+            </div>
+            <p class="zca-progress-status" id="progress-status">Starting sync...</p>
         </div>
 
-        <div style="display: flex; gap: 10px;">
-            <button type="submit" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
-                Start Sync
-            </button>
-            <a href="{% url 'admin:listings_listing_changelist' %}" style="background: #6c757d; color: white; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-size: 14px; display: inline-flex; align-items: center;">
-                Cancel
-            </a>
-        </div>
-    </form>
-
-    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px;">
-        <strong>Note:</strong> Make sure <code>APIFY_TOKEN</code> is configured in your Railway environment variables.
-        Get your API token from <a href="https://console.apify.com/account#/integrations" target="_blank">Apify Console</a>.
+        <div id="zca-sync-results" style="display: none;"></div>
     </div>
 
-    <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">
-        <strong>What gets synced:</strong>
-        <ul style="margin-bottom: 0; margin-top: 10px;">
-            <li>Title, description, property type</li>
-            <li>Location, coordinates, city</li>
-            <li>Price, capacity (guests, bedrooms, beds, bathrooms)</li>
-            <li>All photos (uploaded to your storage)</li>
-            <li>Amenities</li>
-            <li>Ratings and reviews</li>
-            <li>House rules, check-in/out times</li>
-        </ul>
+    <!-- Sync Existing Listings -->
+    <div class="zca-sync-section">
+        <h2>Sync Existing Listings</h2>
+        <p>Update all existing listings that have an Airbnb URL.</p>
+
+        <form id="zca-sync-all-form" method="post" action="?sync_all=1">
+            {% csrf_token %}
+            <p>
+                <button type="submit" id="zca-sync-all-btn" class="button-secondary" {% if not apify_configured %}disabled{% endif %}>
+                    Sync All Existing Listings
+                </button>
+            </p>
+        </form>
+
+        {% if last_sync %}
+        <p class="zca-last-sync">Last sync: {{ last_sync }}</p>
+        {% endif %}
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('zca-sync-form');
+    const progress = document.getElementById('zca-sync-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const progressStatus = document.getElementById('progress-status');
+    const results = document.getElementById('zca-sync-results');
+    const syncBtn = document.getElementById('zca-sync-btn');
+
+    form.addEventListener('submit', function(e) {
+        // Show progress, form submits normally
+        progress.style.display = 'block';
+        results.style.display = 'none';
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing...';
+        progressFill.style.width = '20%';
+        progressStatus.textContent = 'Starting sync...';
+
+        // Animate progress
+        let progressVal = 20;
+        const interval = setInterval(function() {
+            if (progressVal < 90) {
+                progressVal += Math.random() * 5;
+                progressFill.style.width = progressVal + '%';
+                if (progressVal > 40) progressStatus.textContent = 'Fetching data from Airbnb...';
+                if (progressVal > 60) progressStatus.textContent = 'Processing listings...';
+                if (progressVal > 80) progressStatus.textContent = 'Downloading images...';
+            }
+        }, 2000);
+    });
+});
+</script>
 {% endblock %}
