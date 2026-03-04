@@ -132,6 +132,13 @@ https://www.airbnb.com/rooms/87654321" {% if not apify_configured %}disabled{% e
             </p>
         </form>
 
+        <div id="zca-sync-all-progress" style="display: none;">
+            <div class="zca-progress-bar">
+                <div class="zca-progress-fill" id="progress-fill-all"></div>
+            </div>
+            <p class="zca-progress-status" id="progress-status-all">Starting sync...</p>
+        </div>
+
         {% if last_sync %}
         <p class="zca-last-sync">Last sync: {{ last_sync }}</p>
         {% endif %}
@@ -140,6 +147,7 @@ https://www.airbnb.com/rooms/87654321" {% if not apify_configured %}disabled{% e
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Import New Listings form
     const form = document.getElementById('zca-sync-form');
     const progress = document.getElementById('zca-sync-progress');
     const progressFill = document.getElementById('progress-fill');
@@ -148,7 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const syncBtn = document.getElementById('zca-sync-btn');
 
     form.addEventListener('submit', function(e) {
-        // Show progress, form submits normally
         progress.style.display = 'block';
         results.style.display = 'none';
         syncBtn.disabled = true;
@@ -156,15 +163,40 @@ document.addEventListener('DOMContentLoaded', function() {
         progressFill.style.width = '20%';
         progressStatus.textContent = 'Starting sync...';
 
-        // Animate progress
         let progressVal = 20;
-        const interval = setInterval(function() {
+        setInterval(function() {
             if (progressVal < 90) {
                 progressVal += Math.random() * 5;
                 progressFill.style.width = progressVal + '%';
                 if (progressVal > 40) progressStatus.textContent = 'Fetching data from Airbnb...';
                 if (progressVal > 60) progressStatus.textContent = 'Processing listings...';
                 if (progressVal > 80) progressStatus.textContent = 'Downloading images...';
+            }
+        }, 2000);
+    });
+
+    // Sync All Existing Listings form
+    const formAll = document.getElementById('zca-sync-all-form');
+    const progressAll = document.getElementById('zca-sync-all-progress');
+    const progressFillAll = document.getElementById('progress-fill-all');
+    const progressStatusAll = document.getElementById('progress-status-all');
+    const syncAllBtn = document.getElementById('zca-sync-all-btn');
+
+    formAll.addEventListener('submit', function(e) {
+        progressAll.style.display = 'block';
+        syncAllBtn.disabled = true;
+        syncAllBtn.textContent = 'Syncing...';
+        progressFillAll.style.width = '20%';
+        progressStatusAll.textContent = 'Starting sync...';
+
+        let progressVal = 20;
+        setInterval(function() {
+            if (progressVal < 90) {
+                progressVal += Math.random() * 5;
+                progressFillAll.style.width = progressVal + '%';
+                if (progressVal > 40) progressStatusAll.textContent = 'Fetching data from Airbnb...';
+                if (progressVal > 60) progressStatusAll.textContent = 'Processing listings...';
+                if (progressVal > 80) progressStatusAll.textContent = 'Downloading images...';
             }
         }, 2000);
     });
