@@ -43,6 +43,10 @@ except admin.sites.NotRegistered:
 class UserAdmin(BaseUserAdmin, ModelAdmin):
     """Admin configuration for custom User model with host approval."""
 
+    def has_module_permission(self, request):
+        """Only superusers can see Users in sidebar."""
+        return request.user.is_superuser
+
     list_display = [
         'username',
         'email',
@@ -117,6 +121,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
             host_status=User.HostStatus.APPROVED,
             host_approved_date=timezone.now(),
             user_type=User.UserType.HOST,
+            is_staff=True,  # Allow hosts to login to admin
         )
         self.message_user(request, f'{count} host(s) approved.')
 
@@ -135,6 +140,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
             user_type=User.UserType.HOST,
             host_status=User.HostStatus.APPROVED,
             host_approved_date=timezone.now(),
+            is_staff=True,  # Allow hosts to login to admin
         )
         self.message_user(request, f'{count} user(s) are now hosts.')
 
@@ -143,5 +149,6 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         count = queryset.update(
             user_type=User.UserType.GUEST,
             host_status=User.HostStatus.NOT_APPLIED,
+            is_staff=False,  # Remove admin access
         )
         self.message_user(request, f'{count} user(s) are now guests.')

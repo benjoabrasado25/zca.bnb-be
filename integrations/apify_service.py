@@ -279,6 +279,8 @@ class AirbnbSyncService:
             parts = location_subtitle.split(',')
             if parts:
                 city_name = parts[0].strip()
+                # Clean city name - remove "City of" prefix (e.g., "City of Taguig" -> "Taguig")
+                city_name = re.sub(r'^City of\s+', '', city_name, flags=re.IGNORECASE)
                 province = parts[1].strip() if len(parts) > 1 else ''
                 city, _ = City.objects.get_or_create(
                     name=city_name,
