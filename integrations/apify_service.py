@@ -213,8 +213,12 @@ class AirbnbSyncService:
             cls._update_house_rules(listing, data)
             cls._update_highlights(listing, data)
 
-            # Set status to active
-            listing.status = Listing.Status.ACTIVE
+            # Set status to pending_review (requires admin approval)
+            # Only update status if it was just created or is draft
+            if created or listing.status == Listing.Status.DRAFT:
+                listing.status = Listing.Status.PENDING_REVIEW
+                listing.submitted_for_review_at = timezone.now()
+
             listing.last_synced = timezone.now()
             listing.save()
 

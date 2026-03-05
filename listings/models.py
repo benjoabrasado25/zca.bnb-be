@@ -244,14 +244,32 @@ class Listing(models.Model):
 
     def save(self, *args, **kwargs):
         """Generate unique slug on save."""
-        if not self.slug:
+        # Generate slug if empty or if it's a placeholder like 'untitled'
+        should_regenerate = (
+            not self.slug or
+            self.slug == 'untitled' or
+            self.slug.startswith('untitled-')
+        )
+
+        if should_regenerate and self.title and self.title.lower() != 'untitled':
             base_slug = slugify(self.title)
-            slug = base_slug
+            if base_slug:  # Only update if we get a valid slug
+                slug = base_slug
+                counter = 1
+                while Listing.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+                self.slug = slug
+        elif not self.slug:
+            # Fallback for empty slug
+            base_slug = slugify(self.title) if self.title else 'listing'
+            slug = base_slug or 'listing'
             counter = 1
             while Listing.objects.filter(slug=slug).exclude(pk=self.pk).exists():
-                slug = f"{base_slug}-{counter}"
+                slug = f"{base_slug or 'listing'}-{counter}"
                 counter += 1
             self.slug = slug
+
         super().save(*args, **kwargs)
 
     def regenerate_ical_token(self):

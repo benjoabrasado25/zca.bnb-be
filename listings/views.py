@@ -181,15 +181,18 @@ class ListingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Listing.objects.select_related('host').prefetch_related('images')
 
-        # Show only active listings for public views
-        if self.action == 'list' and not self.request.user.is_authenticated:
-            queryset = queryset.filter(status=Listing.Status.ACTIVE)
-        elif self.action == 'list' and self.request.user.is_authenticated:
-            # Authenticated users see active listings + their own drafts
-            from django.db.models import Q
-            queryset = queryset.filter(
-                Q(status=Listing.Status.ACTIVE) | Q(host=self.request.user)
-            )
+        # For public views (list and retrieve), only show active listings
+        # unless the user is the owner
+        if self.action in ['list', 'retrieve']:
+            if not self.request.user.is_authenticated:
+                # Anonymous users only see active listings
+                queryset = queryset.filter(status=Listing.Status.ACTIVE)
+            else:
+                # Authenticated users see active listings + their own (any status)
+                from django.db.models import Q
+                queryset = queryset.filter(
+                    Q(status=Listing.Status.ACTIVE) | Q(host=self.request.user)
+                )
 
         return queryset.distinct()
 
