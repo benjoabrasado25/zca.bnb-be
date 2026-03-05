@@ -96,7 +96,7 @@ class ListingAdmin(ModelAdmin):
     search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
     readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
     inlines = [ListingImageInline, ListingAmenityMappingInline, BlockedDateInline, IcalSyncInline]
-    actions = ['approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
+    actions = ['approve_listings', 'reject_listings', 'set_pending_review', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
     autocomplete_fields = ['host', 'city']
     list_editable = ['is_featured']
     change_list_template = 'admin/listings/listing/change_list.html'
@@ -288,6 +288,19 @@ class ListingAdmin(ModelAdmin):
             reviewed_by=request.user,
         )
         self.message_user(request, f'{count} listing(s) rejected.')
+
+    @admin.action(description='⏳ Set to Pending Review')
+    def set_pending_review(self, request, queryset):
+        """Set selected listings back to Pending Review status."""
+        count = queryset.exclude(
+            status=Listing.Status.PENDING_REVIEW
+        ).update(
+            status=Listing.Status.PENDING_REVIEW,
+            submitted_for_review_at=timezone.now(),
+            reviewed_at=None,
+            reviewed_by=None,
+        )
+        self.message_user(request, f'{count} listing(s) set to pending review.')
 
     @admin.action(description='⭐ Feature selected listings')
     def feature_listings(self, request, queryset):

@@ -181,18 +181,10 @@ class ListingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Listing.objects.select_related('host').prefetch_related('images')
 
-        # For public views (list and retrieve), only show active listings
-        # unless the user is the owner
+        # For public views (list and retrieve), ONLY show active listings
+        # Hosts should use /my_listings/ endpoint to see their pending listings
         if self.action in ['list', 'retrieve']:
-            if not self.request.user.is_authenticated:
-                # Anonymous users only see active listings
-                queryset = queryset.filter(status=Listing.Status.ACTIVE)
-            else:
-                # Authenticated users see active listings + their own (any status)
-                from django.db.models import Q
-                queryset = queryset.filter(
-                    Q(status=Listing.Status.ACTIVE) | Q(host=self.request.user)
-                )
+            queryset = queryset.filter(status=Listing.Status.ACTIVE)
 
         return queryset.distinct()
 
