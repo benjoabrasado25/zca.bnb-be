@@ -220,7 +220,11 @@ class AirbnbSyncView(APIView):
 
     def post(self, request):
         """Start Airbnb sync for the given URLs."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         urls = request.data.get('urls', [])
+        logger.info(f"Airbnb sync requested by {request.user.email} with URLs: {urls}")
 
         if not urls:
             return Response(
@@ -239,13 +243,39 @@ class AirbnbSyncView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        logger.info(f"Starting sync for {len(valid_urls)} valid URLs")
+
+        # Check if APIFY is configured
+        if not AirbnbSyncService.get_api_token():
+            return Response({
+                'error': 'APIFY_TOKEN is not configured on the server.',
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         # Start the sync process
-        results = AirbnbSyncService.sync_and_wait(valid_urls, request.user)
+        try:
+            results = AirbnbSyncService.sync_and_wait(valid_urls, request.user)
+            logger.info(f"Sync results: {results}")
+        except Exception as e:
+            logger.exception(f"Sync failed with exception: {e}")
+            return Response({
+                'error': f'Sync failed: {str(e)}',
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         if not results['success']:
             return Response({
                 'error': 'Sync failed',
                 'details': results['errors'],
+                'run_id': results.get('run_id'),
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if any listings were actually synced
+        if not results['listings']:
+            # Sync succeeded but no listings were found
+            return Response({
+                'success': False,
+                'error': 'Sync completed but no listings were found. This may happen if the Airbnb URLs are invalid or the scraper could not fetch the data. Please check your URLs and try again.',
+                'run_id': results.get('run_id'),
+                'errors': results.get('errors', []),
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # IMPORTANT: Update synced listings to pending_review status
