@@ -10,6 +10,8 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user details."""
 
+    is_host = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -19,13 +21,15 @@ class UserSerializer(serializers.ModelSerializer):
             'first_name',
             'last_name',
             'user_type',
+            'host_status',
+            'is_host',
             'phone_number',
             'profile_picture',
             'bio',
             'is_verified',
             'created_at',
         ]
-        read_only_fields = ['id', 'is_verified', 'created_at']
+        read_only_fields = ['id', 'is_verified', 'created_at', 'host_status', 'is_host']
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):

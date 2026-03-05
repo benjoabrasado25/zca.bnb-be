@@ -10,10 +10,6 @@ from .models import Booking, BlockedDate
 class BookingAdmin(ModelAdmin):
     """Admin for site bookings only (excludes iCal imports)."""
 
-    def has_module_permission(self, request):
-        """Only superusers can see Bookings in sidebar."""
-        return request.user.is_superuser
-
     list_display = [
         'id',
         'listing',

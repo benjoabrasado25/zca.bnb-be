@@ -37,10 +37,6 @@ class CityAdmin(ModelAdmin):
         return obj.listings.count()
     listing_count.short_description = 'Listings'
 
-    def has_module_permission(self, request):
-        """Only superusers can see Cities in sidebar."""
-        return request.user.is_superuser
-
 
 class ListingImageInline(TabularInline):
     model = ListingImage
@@ -100,64 +96,10 @@ class ListingAdmin(ModelAdmin):
     search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
     readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
     inlines = [ListingImageInline, ListingAmenityMappingInline, BlockedDateInline, IcalSyncInline]
-    actions = ['submit_for_review', 'approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
+    actions = ['approve_listings', 'reject_listings', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
     autocomplete_fields = ['host', 'city']
     list_editable = ['is_featured']
     change_list_template = 'admin/listings/listing/change_list.html'
-
-    def has_module_permission(self, request):
-        """All staff (including hosts) can see Listings in sidebar."""
-        return request.user.is_staff
-
-    def has_view_permission(self, request, obj=None):
-        """Hosts can view their own listings."""
-        if request.user.is_superuser:
-            return True
-        if obj:
-            return obj.host == request.user
-        return request.user.is_staff
-
-    def has_add_permission(self, request):
-        """All staff can add listings."""
-        return request.user.is_staff
-
-    def has_change_permission(self, request, obj=None):
-        """Hosts can only edit their own listings."""
-        if request.user.is_superuser:
-            return True
-        if obj:
-            return obj.host == request.user
-        return request.user.is_staff
-
-    def has_delete_permission(self, request, obj=None):
-        """Hosts can only delete their own listings."""
-        if request.user.is_superuser:
-            return True
-        if obj:
-            return obj.host == request.user
-        return request.user.is_staff
-
-    def get_queryset(self, request):
-        """Hosts can only see their own listings. Superusers see all."""
-        qs = super().get_queryset(request)
-        if request.user.is_superuser:
-            return qs
-        return qs.filter(host=request.user)
-
-    def save_model(self, request, obj, form, change):
-        """Auto-assign host to current user if not superuser. New listings start as DRAFT."""
-        if not change and not request.user.is_superuser:
-            obj.host = request.user
-            obj.status = Listing.Status.DRAFT  # Hosts' new listings start as draft
-        super().save_model(request, obj, form, change)
-
-    def get_readonly_fields(self, request, obj=None):
-        """Hosts can't change certain fields."""
-        readonly = list(self.readonly_fields)
-        if not request.user.is_superuser:
-            # Hosts can't change status, featured, or host assignment
-            readonly.extend(['status', 'is_featured', 'host', 'reviewed_by', 'rejection_reason'])
-        return readonly
 
     def airbnb_synced(self, obj):
         if obj.airbnb_id:
@@ -169,9 +111,6 @@ class ListingAdmin(ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('import-airbnb/', self.admin_site.admin_view(self.import_airbnb_view), name='listings_listing_import_airbnb'),
-            path('calendar/', self.admin_site.admin_view(self.calendar_view), name='listings_listing_calendar'),
-            path('calendar/block/', self.admin_site.admin_view(self.block_dates_view), name='listings_listing_block_dates'),
-            path('calendar/unblock/<int:blocked_id>/', self.admin_site.admin_view(self.unblock_dates_view), name='listings_listing_unblock_dates'),
             path('<int:listing_id>/sync-ical/<int:ical_sync_id>', self.admin_site.admin_view(self.sync_ical_view), name='listings_listing_sync_ical'),
         ]
         return custom_urls + urls
@@ -289,124 +228,6 @@ class ListingAdmin(ModelAdmin):
         }
         return render(request, 'admin/listings/listing/import_airbnb.html', context)
 
-    def calendar_view(self, request):
-        """Calendar view for hosts to manage blocked dates across all their listings."""
-        from datetime import date, timedelta
-        from bookings.models import Booking
-        import json
-
-        # Get listings for current user (or all for superuser)
-        if request.user.is_superuser:
-            listings = Listing.objects.all().prefetch_related('blocked_dates', 'bookings', 'images')
-        else:
-            listings = Listing.objects.filter(host=request.user).prefetch_related('blocked_dates', 'bookings', 'images')
-
-        # Get date range (default: current month + 2 months)
-        today = date.today()
-        start_date = today.replace(day=1)
-        # Show 3 months
-        if start_date.month <= 10:
-            end_date = start_date.replace(month=start_date.month + 2, day=28)
-        else:
-            end_date = start_date.replace(year=start_date.year + 1, month=(start_date.month + 2) % 12 or 12, day=28)
-
-        # Build calendar data for each listing
-        calendar_data = []
-        for listing in listings:
-            # Get primary image
-            primary_image = listing.images.filter(is_primary=True).first()
-            if not primary_image:
-                primary_image = listing.images.first()
-
-            # Get bookings (confirmed/pending)
-            bookings = Booking.objects.filter(
-                listing=listing,
-                status__in=['confirmed', 'pending'],
-                check_out__gte=start_date,
-                check_in__lte=end_date,
-            ).values('id', 'check_in', 'check_out', 'guest_name', 'status', 'source')
-
-            # Get blocked dates
-            blocked = BlockedDate.objects.filter(
-                listing=listing,
-                end_date__gte=start_date,
-                start_date__lte=end_date,
-            ).values('id', 'start_date', 'end_date', 'reason')
-
-            calendar_data.append({
-                'listing': listing,
-                'image': primary_image,
-                'bookings': list(bookings),
-                'blocked_dates': list(blocked),
-            })
-
-        # Generate date headers
-        dates = []
-        current = start_date
-        while current <= end_date:
-            dates.append(current)
-            current += timedelta(days=1)
-
-        context = {
-            **self.admin_site.each_context(request),
-            'title': 'Calendar - Manage Availability',
-            'opts': self.model._meta,
-            'calendar_data': calendar_data,
-            'dates': dates,
-            'today': today,
-            'start_date': start_date,
-            'end_date': end_date,
-            'listings_json': json.dumps([{'id': l.id, 'title': l.title} for l in listings]),
-        }
-        return render(request, 'admin/listings/listing/calendar.html', context)
-
-    def block_dates_view(self, request):
-        """Handle blocking dates via POST."""
-        from datetime import datetime
-
-        if request.method == 'POST':
-            listing_id = request.POST.get('listing_id')
-            start_date = request.POST.get('start_date')
-            end_date = request.POST.get('end_date')
-            reason = request.POST.get('reason', '')
-
-            try:
-                # Verify ownership
-                if request.user.is_superuser:
-                    listing = Listing.objects.get(id=listing_id)
-                else:
-                    listing = Listing.objects.get(id=listing_id, host=request.user)
-
-                BlockedDate.objects.create(
-                    listing=listing,
-                    start_date=datetime.strptime(start_date, '%Y-%m-%d').date(),
-                    end_date=datetime.strptime(end_date, '%Y-%m-%d').date(),
-                    reason=reason,
-                )
-                messages.success(request, f'Dates blocked for {listing.title}')
-            except Listing.DoesNotExist:
-                messages.error(request, 'Listing not found or access denied.')
-            except Exception as e:
-                messages.error(request, f'Error: {str(e)}')
-
-        return redirect('admin:listings_listing_calendar')
-
-    def unblock_dates_view(self, request, blocked_id):
-        """Remove a blocked date range."""
-        try:
-            if request.user.is_superuser:
-                blocked = BlockedDate.objects.get(id=blocked_id)
-            else:
-                blocked = BlockedDate.objects.get(id=blocked_id, listing__host=request.user)
-
-            listing_title = blocked.listing.title
-            blocked.delete()
-            messages.success(request, f'Unblocked dates for {listing_title}')
-        except BlockedDate.DoesNotExist:
-            messages.error(request, 'Blocked date not found or access denied.')
-
-        return redirect('admin:listings_listing_calendar')
-
     fieldsets = (
         ('Basic Info', {
             'fields': ('host', 'title', 'description', 'property_type', 'property_category', 'status'),
@@ -445,29 +266,6 @@ class ListingAdmin(ModelAdmin):
             'fields': ('created_at', 'updated_at'),
         }),
     )
-
-    def get_actions(self, request):
-        """Filter actions based on user type."""
-        actions = super().get_actions(request)
-        if not request.user.is_superuser:
-            # Hosts can only submit for review, not approve/reject/feature
-            allowed = ['submit_for_review']
-            actions = {k: v for k, v in actions.items() if k in allowed or k == 'delete_selected'}
-        return actions
-
-    @admin.action(description='📝 Submit for Review')
-    def submit_for_review(self, request, queryset):
-        """Host action to submit draft listings for admin review."""
-        count = queryset.filter(
-            status=Listing.Status.DRAFT
-        ).update(
-            status=Listing.Status.PENDING_REVIEW,
-            submitted_for_review_at=timezone.now(),
-        )
-        if count:
-            self.message_user(request, f'{count} listing(s) submitted for review. Admin will approve shortly.')
-        else:
-            self.message_user(request, 'No draft listings selected.', level=messages.WARNING)
 
     @admin.action(description='✅ Approve selected listings')
     def approve_listings(self, request, queryset):
@@ -537,7 +335,3 @@ class ListingAmenityAdmin(ModelAdmin):
     list_display = ['name', 'category', 'icon']
     list_filter = ['category']
     search_fields = ['name']
-
-    def has_module_permission(self, request):
-        """Only superusers can see Amenities in sidebar."""
-        return request.user.is_superuser
