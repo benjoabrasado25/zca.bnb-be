@@ -17,10 +17,25 @@ class CitySerializer(serializers.ModelSerializer):
 class ListingImageSerializer(serializers.ModelSerializer):
     """Serializer for listing images."""
 
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = ListingImage
         fields = ['id', 'image', 'caption', 'is_primary', 'order']
         read_only_fields = ['id']
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        image_url = obj.image.url
+        # If it's already an absolute URL (e.g., from Airbnb), return as-is
+        if image_url.startswith('http://') or image_url.startswith('https://'):
+            return image_url
+        # Otherwise, build absolute URI for local files
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(image_url)
+        return image_url
 
 
 class ListingAmenitySerializer(serializers.ModelSerializer):
@@ -70,10 +85,17 @@ class ListingListSerializer(serializers.ModelSerializer):
         if not primary:
             primary = obj.images.first()
         if primary:
+            image_url = primary.image.url if primary.image else None
+            if not image_url:
+                return None
+            # If it's already an absolute URL (e.g., from Airbnb), return as-is
+            if image_url.startswith('http://') or image_url.startswith('https://'):
+                return image_url
+            # Otherwise, build absolute URI for local files
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(primary.image.url)
-            return primary.image.url
+                return request.build_absolute_uri(image_url)
+            return image_url
         return None
 
     def get_booked_dates(self, obj):
