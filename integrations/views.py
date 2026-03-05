@@ -8,13 +8,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from listings.models import Listing
-from .models import IcalSync, IcalSyncLog
+from .models import IcalSync, IcalSyncLog, AirbnbSyncJob
 from .serializers import (
     IcalSyncSerializer,
     IcalSyncCreateSerializer,
     IcalSyncLogSerializer,
+    AirbnbSyncJobSerializer,
 )
 from .ical_service import IcalExportService, IcalImportService
+from .apify_service import AirbnbSyncService
 
 
 class IcalExportView(APIView):
@@ -188,3 +190,102 @@ class IcalExportUrlView(APIView):
             'message': 'Export URL regenerated. Update this URL in any external platforms.',
             'export_url': export_url,
         })
+
+
+class IsHost(permissions.BasePermission):
+    """Permission that requires user to be an approved host."""
+
+    def has_permission(self, request, view):
+        return (
+            request.user and
+            request.user.is_authenticated and
+            request.user.is_host
+        )
+
+
+class AirbnbSyncView(APIView):
+    """
+    API endpoint for hosts to sync Airbnb listings.
+
+    POST /api/integrations/airbnb-sync/
+    {
+        "urls": ["https://airbnb.com/rooms/12345", ...]
+    }
+
+    Synced listings will be set to 'pending_review' status
+    and require admin approval before going live.
+    """
+
+    permission_classes = [IsHost]
+
+    def post(self, request):
+        """Start Airbnb sync for the given URLs."""
+        urls = request.data.get('urls', [])
+
+        if not urls:
+            return Response(
+                {'error': 'No URLs provided. Please provide at least one Airbnb URL.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not isinstance(urls, list):
+            urls = [urls]
+
+        # Validate URLs
+        valid_urls = [url for url in urls if 'airbnb.com' in url]
+        if not valid_urls:
+            return Response(
+                {'error': 'No valid Airbnb URLs found. URLs must contain airbnb.com'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Start the sync process
+        results = AirbnbSyncService.sync_and_wait(valid_urls, request.user)
+
+        if not results['success']:
+            return Response({
+                'error': 'Sync failed',
+                'details': results['errors'],
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # IMPORTANT: Update synced listings to pending_review status
+        # Hosts cannot directly publish listings - they need admin approval
+        from django.utils import timezone
+        pending_count = 0
+        for listing_id in results['listings']:
+            try:
+                listing = Listing.objects.get(id=listing_id)
+                listing.status = Listing.Status.PENDING_REVIEW
+                listing.submitted_for_review_at = timezone.now()
+                listing.save(update_fields=['status', 'submitted_for_review_at'])
+                pending_count += 1
+            except Listing.DoesNotExist:
+                pass
+
+        return Response({
+            'success': True,
+            'message': f'Successfully synced {len(results["listings"])} listing(s). They are now pending admin approval.',
+            'created': results['created'],
+            'updated': results['updated'],
+            'listings': results['listings'],
+            'pending_approval': pending_count,
+        })
+
+
+class AirbnbSyncJobsView(APIView):
+    """
+    API endpoint for hosts to view their sync job history.
+
+    GET /api/integrations/airbnb-sync/jobs/
+    """
+
+    permission_classes = [IsHost]
+
+    def get(self, request):
+        """Get sync job history."""
+        # Get jobs that contain URLs synced by this user
+        # Note: AirbnbSyncJob doesn't track the host directly,
+        # so we return all recent jobs for now
+        jobs = AirbnbSyncJob.objects.all()[:20]
+        serializer = AirbnbSyncJobSerializer(jobs, many=True)
+        return Response(serializer.data)

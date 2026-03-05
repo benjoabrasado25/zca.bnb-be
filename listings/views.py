@@ -202,7 +202,42 @@ class ListingViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Set the host to the current user when creating a listing."""
-        serializer.save(host=self.request.user)
+        # New listings start as draft - host must submit for review
+        serializer.save(host=self.request.user, status=Listing.Status.DRAFT)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def submit_for_review(self, request, slug=None):
+        """
+        Submit a listing for admin review.
+
+        Only the host can submit their own listing.
+        """
+        listing = self.get_object()
+
+        # Verify ownership
+        if listing.host != request.user:
+            return Response(
+                {'error': 'You can only submit your own listings for review'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check current status
+        if listing.status not in [Listing.Status.DRAFT, Listing.Status.REJECTED]:
+            return Response(
+                {'error': f'Cannot submit listing with status: {listing.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update status to pending review
+        from django.utils import timezone
+        listing.status = Listing.Status.PENDING_REVIEW
+        listing.submitted_for_review_at = timezone.now()
+        listing.save(update_fields=['status', 'submitted_for_review_at'])
+
+        return Response({
+            'message': 'Listing submitted for review. You will be notified once approved.',
+            'status': listing.status,
+        })
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.AllowAny])
     def unavailable_dates(self, request, slug=None):

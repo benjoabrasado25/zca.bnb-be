@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from .models import IcalSync, IcalSyncLog
+from .models import IcalSync, IcalSyncLog, AirbnbSyncJob
 
 
 class IcalSyncSerializer(serializers.ModelSerializer):
@@ -72,3 +72,22 @@ class IcalSyncLogSerializer(serializers.ModelSerializer):
             'error_message',
             'created_at',
         ]
+
+
+class AirbnbSyncJobSerializer(serializers.ModelSerializer):
+    """Serializer for Airbnb sync jobs."""
+
+    class Meta:
+        model = AirbnbSyncJob
+        fields = [
+            'id',
+            'run_id',
+            'airbnb_urls',
+            'status',
+            'listings_created',
+            'listings_updated',
+            'error_message',
+            'created_at',
+            'completed_at',
+        ]
+        read_only_fields = fields

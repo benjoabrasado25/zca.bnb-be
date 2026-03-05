@@ -57,6 +57,7 @@ class ListingListSerializer(serializers.ModelSerializer):
             'property_category',
             'is_instant_bookable',
             'is_featured',
+            'status',
             'host',
             'primary_image',
             'latitude',
