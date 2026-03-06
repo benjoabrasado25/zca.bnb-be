@@ -387,6 +387,10 @@ REST_AUTH = {
 # Frontend URL for OAuth callback
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
+# Resend Email Settings
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'StaySuitePH <noreply@staysuiteph.com>')
+
 # Logging
 LOGGING = {
     'version': 1,

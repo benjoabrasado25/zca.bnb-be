@@ -9,6 +9,7 @@ from .views import (
     UserDetailView,
     BecomeHostView,
     GuestIDViewSet,
+    ContactFormView,
 )
 
 app_name = 'users'
@@ -20,6 +21,7 @@ urlpatterns = [
     path('register/', UserRegistrationView.as_view(), name='register'),
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('become-host/', BecomeHostView.as_view(), name='become-host'),
+    path('contact/', ContactFormView.as_view(), name='contact'),
     path('', include(router.urls)),
     # Keep numeric ID route last to avoid conflicts
     path('<int:id>/', UserDetailView.as_view(), name='detail'),

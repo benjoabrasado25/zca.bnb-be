@@ -17,6 +17,7 @@ from .serializers import (
     GuestIDUploadURLSerializer,
 )
 from .services import generate_upload_url, get_id_image, delete_id_from_r2, check_id_exists
+from config.email import send_host_application_received, send_contact_form_email
 
 User = get_user_model()
 
@@ -82,6 +83,9 @@ class BecomeHostView(APIView):
         user.host_status = User.HostStatus.PENDING
         user.host_application_date = timezone.now()
         user.save()
+
+        # Send confirmation email
+        send_host_application_received(user)
 
         return Response(
             {
@@ -243,3 +247,45 @@ class GuestIDViewSet(viewsets.ModelViewSet):
         except Exception:
             pass  # Continue even if R2 delete fails
         instance.delete()
+
+
+class ContactFormView(APIView):
+    """API view for contact form submissions."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        name = request.data.get('name', '').strip()
+        email = request.data.get('email', '').strip()
+        subject = request.data.get('subject', '').strip()
+        message = request.data.get('message', '').strip()
+
+        # Validate required fields
+        errors = {}
+        if not name:
+            errors['name'] = 'Name is required.'
+        if not email:
+            errors['email'] = 'Email is required.'
+        if not subject:
+            errors['subject'] = 'Subject is required.'
+        if not message:
+            errors['message'] = 'Message is required.'
+
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Send email
+        result = send_contact_form_email(
+            name=name,
+            email=email,
+            subject=subject,
+            message=message,
+        )
+
+        if result:
+            return Response({'detail': 'Your message has been sent successfully.'})
+        else:
+            return Response(
+                {'detail': 'Failed to send message. Please try again later.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
