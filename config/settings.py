@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'listings.apps.ListingsConfig',
     'bookings.apps.BookingsConfig',
+    'payments.apps.PaymentsConfig',
     'integrations.apps.IntegrationsConfig',
 ]
 
@@ -327,6 +328,22 @@ ICAL_SYNC_INTERVAL_HOURS = int(os.environ.get('ICAL_SYNC_INTERVAL_HOURS', 1))
 
 # APIFY Settings (for Airbnb sync)
 APIFY_TOKEN = os.environ.get('APIFY_TOKEN', '')
+
+# Cloudflare R2 Settings for Guest IDs (PRIVATE BUCKET)
+# Separate from media bucket - no public access, uses proxy endpoint
+R2_IDS_ACCOUNT_ID = os.environ.get('R2_IDS_ACCOUNT_ID', os.environ.get('R2_ACCOUNT_ID', ''))
+R2_IDS_ACCESS_KEY_ID = os.environ.get('R2_IDS_ACCESS_KEY_ID', os.environ.get('R2_ACCESS_KEY_ID', ''))
+R2_IDS_SECRET_ACCESS_KEY = os.environ.get('R2_IDS_SECRET_ACCESS_KEY', os.environ.get('R2_SECRET_ACCESS_KEY', ''))
+R2_IDS_BUCKET_NAME = os.environ.get('R2_IDS_BUCKET_NAME', 'staysuiteph-ids')
+R2_IDS_ENDPOINT_URL = os.environ.get(
+    'R2_IDS_ENDPOINT_URL',
+    f"https://{R2_IDS_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_IDS_ACCOUNT_ID else ''
+)
+
+# Xendit Payment Gateway Settings
+XENDIT_SECRET_KEY = os.environ.get('XENDIT_SECRET_KEY', '')
+XENDIT_WEBHOOK_TOKEN = os.environ.get('XENDIT_WEBHOOK_TOKEN', '')
+XENDIT_CALLBACK_URL = os.environ.get('XENDIT_CALLBACK_URL', '')  # e.g., https://api.staysuiteph.com/api/payments/webhook/xendit/
 
 # Django Allauth Configuration
 AUTHENTICATION_BACKENDS = [

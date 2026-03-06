@@ -4,7 +4,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_nested import routers
 
-from .views import ListingViewSet, ListingImageViewSet, AmenityViewSet, CityViewSet
+from .views import ListingViewSet, ListingImageViewSet, AmenityViewSet, CityViewSet, listings_sitemap
 
 app_name = 'listings'
 
@@ -24,6 +24,8 @@ listings_router = routers.NestedDefaultRouter(router, r'', lookup='listing')
 listings_router.register(r'images', ListingImageViewSet, basename='listing-images')
 
 urlpatterns = [
+    # Sitemap for SEO
+    path('sitemap.xml', listings_sitemap, name='listings-sitemap'),
     # Amenities and cities must come BEFORE the main listing routes
     path('amenities/', include(amenity_router.urls)),
     path('cities/', include(city_router.urls)),

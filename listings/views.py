@@ -3,9 +3,10 @@
 from datetime import datetime
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 from django_filters import rest_framework as filters
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes as perm_classes
 from rest_framework.response import Response
 
 from bookings.models import Booking, BlockedDate
@@ -316,3 +317,58 @@ class CityViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
     pagination_class = None
     search_fields = ['name', 'province']
+
+
+@api_view(['GET'])
+@perm_classes([permissions.AllowAny])
+def listings_sitemap(request):
+    """
+    Generate a dynamic sitemap XML for all active listings.
+    This helps search engines discover and index all listings.
+    """
+    listings = Listing.objects.filter(
+        status=Listing.Status.ACTIVE
+    ).values('slug', 'updated_at')
+
+    cities = City.objects.filter(is_active=True).values('id', 'name')
+
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
+    # Static pages
+    static_pages = [
+        ('/', 'daily', '1.0'),
+        ('/search', 'daily', '0.9'),
+        ('/become-host', 'weekly', '0.7'),
+        ('/privacy', 'monthly', '0.3'),
+        ('/terms', 'monthly', '0.3'),
+    ]
+
+    for url, freq, priority in static_pages:
+        xml_content += f'''  <url>
+    <loc>https://staysuiteph.com{url}</loc>
+    <changefreq>{freq}</changefreq>
+    <priority>{priority}</priority>
+  </url>\n'''
+
+    # City search pages
+    for city in cities:
+        xml_content += f'''  <url>
+    <loc>https://staysuiteph.com/search?city={city['id']}</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>\n'''
+
+    # Individual listing pages
+    for listing in listings:
+        lastmod = listing['updated_at'].strftime('%Y-%m-%d') if listing['updated_at'] else ''
+        xml_content += f'''  <url>
+    <loc>https://staysuiteph.com/listings/{listing['slug']}</loc>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>\n'''
+
+    xml_content += '</urlset>'
+
+    return HttpResponse(xml_content, content_type='application/xml')

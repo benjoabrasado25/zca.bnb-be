@@ -73,3 +73,55 @@ class User(AbstractUser):
     def can_create_listing(self):
         """Check if user can create listings (must be approved host)."""
         return self.is_host
+
+
+class GuestID(models.Model):
+    """
+    Guest identification document for booking verification.
+    Images are stored in private R2 bucket, accessed via proxy endpoint.
+    """
+
+    class IDType(models.TextChoices):
+        PASSPORT = 'passport', 'Passport'
+        DRIVERS_LICENSE = 'drivers_license', "Driver's License"
+        NATIONAL_ID = 'national_id', 'National ID'
+        OTHER = 'other', 'Other Government ID'
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='guest_ids',
+    )
+    r2_key = models.CharField(
+        max_length=500,
+        help_text='Private R2 object key (not public URL)',
+    )
+    id_type = models.CharField(
+        max_length=50,
+        choices=IDType.choices,
+        default=IDType.NATIONAL_ID,
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_verified = models.BooleanField(
+        default=False,
+        help_text='Has this ID been verified by admin/host',
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text='Is this the current active ID for the user',
+    )
+
+    class Meta:
+        db_table = 'guest_ids'
+        ordering = ['-uploaded_at']
+        verbose_name = 'Guest ID'
+        verbose_name_plural = 'Guest IDs'
+
+    def __str__(self):
+        return f"{self.user.email} - {self.get_id_type_display()}"
+
+    def save(self, *args, **kwargs):
+        # If this is being set as primary, unset others
+        if self.is_primary:
+            GuestID.objects.filter(user=self.user, is_primary=True).update(is_primary=False)
+        super().save(*args, **kwargs)

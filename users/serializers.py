@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from .models import GuestID
+
 User = get_user_model()
 
 
@@ -102,3 +104,36 @@ class PublicUserSerializer(serializers.ModelSerializer):
             'is_verified',
             'created_at',
         ]
+
+
+class GuestIDSerializer(serializers.ModelSerializer):
+    """Serializer for guest ID documents."""
+
+    id_type_display = serializers.CharField(source='get_id_type_display', read_only=True)
+
+    class Meta:
+        model = GuestID
+        fields = [
+            'id',
+            'id_type',
+            'id_type_display',
+            'uploaded_at',
+            'is_verified',
+            'is_primary',
+        ]
+        read_only_fields = ['id', 'uploaded_at', 'is_verified']
+
+
+class GuestIDUploadConfirmSerializer(serializers.Serializer):
+    """Serializer for confirming guest ID upload."""
+
+    r2_key = serializers.CharField(max_length=500)
+    id_type = serializers.ChoiceField(choices=GuestID.IDType.choices)
+    set_as_primary = serializers.BooleanField(default=True)
+
+
+class GuestIDUploadURLSerializer(serializers.Serializer):
+    """Serializer for requesting a presigned upload URL."""
+
+    filename = serializers.CharField(max_length=255)
+    content_type = serializers.CharField(max_length=100, default='image/jpeg')

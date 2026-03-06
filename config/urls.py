@@ -15,6 +15,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from integrations.urls import ical_export_patterns
+from listings.views import listings_sitemap
 
 
 def health_check(request):
@@ -31,6 +32,9 @@ def health_check(request):
 urlpatterns = [
     # Health check (no auth required)
     path('health/', health_check, name='health-check'),
+
+    # SEO Sitemap
+    path('sitemap.xml', listings_sitemap, name='sitemap'),
 
     path('admin/', admin.site.urls),
 
@@ -49,6 +53,7 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
     path('api/listings/', include('listings.urls')),
     path('api/bookings/', include('bookings.urls')),
+    path('api/payments/', include('payments.urls')),
     path('api/integrations/', include('integrations.urls')),
 
     # iCal export (public endpoint for Airbnb to fetch)
