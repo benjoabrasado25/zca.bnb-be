@@ -27,15 +27,22 @@ except admin.sites.NotRegistered:
 
 @admin.register(City)
 class CityAdmin(ModelAdmin):
-    list_display = ['name', 'province', 'country', 'is_active', 'order', 'listing_count']
-    list_filter = ['is_active', 'province', 'country']
+    list_display = ['name', 'province', 'country', 'is_active', 'is_featured', 'order', 'listing_count', 'city_image_preview']
+    list_filter = ['is_active', 'is_featured', 'province', 'country']
     search_fields = ['name', 'province']
-    list_editable = ['is_active', 'order']
+    list_editable = ['is_active', 'is_featured', 'order']
     ordering = ['order', 'name']
+    fields = ['name', 'province', 'country', 'image', 'description', 'is_active', 'is_featured', 'order']
 
     def listing_count(self, obj):
         return obj.listings.count()
     listing_count.short_description = 'Listings'
+
+    def city_image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" />', obj.image.url)
+        return '-'
+    city_image_preview.short_description = 'Image'
 
 
 class ListingImageInline(TabularInline):

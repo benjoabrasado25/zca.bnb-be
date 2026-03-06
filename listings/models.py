@@ -13,7 +13,10 @@ class City(models.Model):
     name = models.CharField(max_length=100)
     province = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, default='Philippines')
+    image = models.ImageField(upload_to='city_images/', blank=True, null=True, help_text='City cover image for homepage')
+    description = models.TextField(blank=True, help_text='Short description for homepage display')
     is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False, help_text='Show on homepage')
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 

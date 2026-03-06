@@ -318,6 +318,16 @@ class CityViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = None
     search_fields = ['name', 'province']
 
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Get featured cities for homepage display."""
+        featured_cities = City.objects.filter(
+            is_active=True,
+            is_featured=True
+        ).order_by('order', 'name')
+        serializer = self.get_serializer(featured_cities, many=True)
+        return Response(serializer.data)
+
 
 @api_view(['GET'])
 @perm_classes([permissions.AllowAny])

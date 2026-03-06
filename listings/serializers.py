@@ -9,9 +9,28 @@ from .models import City, Listing, ListingImage, ListingAmenity, ListingAmenityM
 class CitySerializer(serializers.ModelSerializer):
     """Serializer for cities."""
 
+    image = serializers.SerializerMethodField()
+    listing_count = serializers.SerializerMethodField()
+
     class Meta:
         model = City
-        fields = ['id', 'name', 'province', 'country']
+        fields = ['id', 'name', 'province', 'country', 'image', 'description', 'is_featured', 'listing_count']
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        image_url = obj.image.url
+        # If it's already an absolute URL, return as-is
+        if image_url.startswith('http://') or image_url.startswith('https://'):
+            return image_url
+        # Otherwise, build absolute URI for local files
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(image_url)
+        return image_url
+
+    def get_listing_count(self, obj):
+        return obj.listings.filter(status='active').count()
 
 
 class ListingImageSerializer(serializers.ModelSerializer):
