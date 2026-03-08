@@ -329,6 +329,10 @@ ICAL_SYNC_INTERVAL_HOURS = int(os.environ.get('ICAL_SYNC_INTERVAL_HOURS', 1))
 # APIFY Settings (for Airbnb sync)
 APIFY_TOKEN = os.environ.get('APIFY_TOKEN', '')
 
+# Amadeus API Settings (for Hotel sync)
+AMADEUS_API_KEY = os.environ.get('AMADEUS_API_KEY', '')
+AMADEUS_API_SECRET = os.environ.get('AMADEUS_API_SECRET', '')
+
 # Cloudflare R2 Settings for Guest IDs (PRIVATE BUCKET)
 # Separate from media bucket - no public access, uses proxy endpoint
 R2_IDS_ACCOUNT_ID = os.environ.get('R2_IDS_ACCOUNT_ID', os.environ.get('R2_ACCOUNT_ID', ''))

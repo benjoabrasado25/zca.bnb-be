@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h1>Sync Hotels from Amadeus - Select City</h1>
+
+    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <p>This will fetch all hotels from Amadeus API for the selected Philippine city and create draft listings.</p>
+        <p>Each hotel will also get a Klook search URL generated for affiliate linking.</p>
+    </div>
+
+    <form method="post" action="{% url 'admin:integrations_amadeus_sync_city' %}">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 20px;">
+            <label for="city_code" style="display: block; font-weight: bold; margin-bottom: 8px;">
+                Select City:
+            </label>
+            <select name="city_code" id="city_code" style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="">-- Select a city --</option>
+                {% for code, name in philippine_cities.items %}
+                <option value="{{ code }}">{{ name }} ({{ code }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" style="background: #059669; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer;">
+                Start Sync
+            </button>
+            <a href="{% url 'admin:integrations_amadeussyncjob_changelist' %}"
+               style="background: #6b7280; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; text-decoration: none; display: inline-block;">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
