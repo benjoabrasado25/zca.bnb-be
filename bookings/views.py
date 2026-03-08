@@ -172,20 +172,24 @@ class BlockedDateViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Create blocked dates for a listing."""
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        # Get the listing from validated data (PrimaryKeyRelatedField returns Listing object)
-        listing = serializer.validated_data['listing']
-
-        # Verify the user owns this listing
-        if listing.host != request.user:
-            return Response(
-                {'detail': 'You do not have permission to block dates for this listing.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        import traceback
+        import logging
+        logger = logging.getLogger(__name__)
 
         try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            # Get the listing from validated data (PrimaryKeyRelatedField returns Listing object)
+            listing = serializer.validated_data['listing']
+
+            # Verify the user owns this listing
+            if listing.host != request.user:
+                return Response(
+                    {'detail': 'You do not have permission to block dates for this listing.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             blocked = BookingService.block_dates(
                 listing=listing,
                 start_date=serializer.validated_data['start_date'],
@@ -198,6 +202,12 @@ class BlockedDateViewSet(viewsets.ModelViewSet):
             return Response(
                 {'detail': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"BlockedDate create error: {e}\n{traceback.format_exc()}")
+            return Response(
+                {'detail': f'Server error: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
