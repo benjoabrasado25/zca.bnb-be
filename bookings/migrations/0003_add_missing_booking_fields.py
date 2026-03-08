@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
                 related_name='bookings',
-                to='users.guestid',
+                to='users.GuestID',
             ),
         ),
         migrations.AddField(
