@@ -90,6 +90,7 @@ class ListingListSerializer(serializers.ModelSerializer):
             'property_type',
             'property_category',
             'is_instant_bookable',
+            'is_inquiry_only',
             'is_featured',
             'status',
             'host',
@@ -204,6 +205,7 @@ class ListingDetailSerializer(serializers.ModelSerializer):
             # Status
             'status',
             'is_instant_bookable',
+            'is_inquiry_only',
             'is_featured',
             'host',
             'images',
@@ -317,6 +319,7 @@ class ListingCreateUpdateSerializer(serializers.ModelSerializer):
             # Status
             'status',
             'is_instant_bookable',
+            'is_inquiry_only',
             'amenity_ids',
         ]
 
