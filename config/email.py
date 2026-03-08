@@ -126,7 +126,7 @@ def send_booking_notification_to_host(booking) -> dict | None:
                 <p><strong>Total:</strong> ₱{booking.total_price:,.2f}</p>
             </div>
 
-            {f'<div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;"><strong>Message from guest:</strong><p style="margin-bottom: 0;">{booking.message_to_host}</p></div>' if booking.message_to_host else ''}
+            {f'<div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;"><strong>Message from guest:</strong><p style="margin-bottom: 0;">{booking.special_requests}</p></div>' if booking.special_requests else ''}
 
             <p style="margin-top: 30px;">
                 <a href="{settings.FRONTEND_URL}/hosting/reservations"

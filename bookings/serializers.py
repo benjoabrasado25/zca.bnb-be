@@ -256,13 +256,6 @@ class CheckoutSerializer(serializers.Serializer):
     check_in = serializers.DateField()
     check_out = serializers.DateField()
     num_guests = serializers.IntegerField(min_value=1)
-    guest_id = serializers.IntegerField(required=False, allow_null=True)
-    new_guest_id_r2_key = serializers.CharField(required=False, allow_blank=True)
-    new_guest_id_type = serializers.ChoiceField(
-        choices=GuestID.IDType.choices,
-        required=False,
-    )
-    message_to_host = serializers.CharField(required=False, allow_blank=True, max_length=2000)
     special_requests = serializers.CharField(required=False, allow_blank=True, max_length=2000)
 
     def validate_listing_id(self, value):
@@ -277,13 +270,6 @@ class CheckoutSerializer(serializers.Serializer):
     def validate_check_in(self, value):
         if value < date.today():
             raise serializers.ValidationError('Check-in date cannot be in the past')
-        return value
-
-    def validate_guest_id(self, value):
-        if value:
-            user = self.context['request'].user
-            if not GuestID.objects.filter(id=value, user=user).exists():
-                raise serializers.ValidationError('Invalid guest ID')
         return value
 
     def validate(self, attrs):
@@ -330,16 +316,6 @@ class CheckoutSerializer(serializers.Serializer):
             except Listing.DoesNotExist:
                 pass
 
-        # Validate guest ID requirements
-        guest_id = attrs.get('guest_id')
-        new_guest_id_r2_key = attrs.get('new_guest_id_r2_key')
-        new_guest_id_type = attrs.get('new_guest_id_type')
-
-        if new_guest_id_r2_key and not new_guest_id_type:
-            raise serializers.ValidationError({
-                'new_guest_id_type': 'ID type is required when uploading a new ID'
-            })
-
         return attrs
 
 
@@ -347,7 +323,6 @@ class CheckoutResponseSerializer(serializers.ModelSerializer):
     """Response serializer for checkout endpoint."""
 
     listing = ListingListSerializer(read_only=True)
-    guest_id_document = GuestIDSerializer(read_only=True)
     nights = serializers.IntegerField(read_only=True)
     payment = serializers.SerializerMethodField()
 
@@ -365,9 +340,7 @@ class CheckoutResponseSerializer(serializers.ModelSerializer):
             'total_price',
             'currency',
             'status',
-            'message_to_host',
             'special_requests',
-            'guest_id_document',
             'payment',
             'created_at',
         ]

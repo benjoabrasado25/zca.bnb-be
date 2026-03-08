@@ -41,14 +41,6 @@ class Booking(models.Model):
         null=True,
         blank=True,
     )
-    guest_id_document = models.ForeignKey(
-        'users.GuestID',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='bookings',
-        help_text='Guest ID document used for verification',
-    )
 
     # Dates
     check_in = models.DateField()
@@ -88,10 +80,6 @@ class Booking(models.Model):
     # Notes
     special_requests = models.TextField(blank=True)
     host_notes = models.TextField(blank=True)
-    message_to_host = models.TextField(
-        blank=True,
-        help_text='Initial message from guest to host',
-    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

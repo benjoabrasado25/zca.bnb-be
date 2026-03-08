@@ -239,43 +239,6 @@ class CheckoutView(APIView):
         # Get the listing
         listing = get_object_or_404(Listing, id=data['listing_id'])
 
-        # Handle guest ID
-        guest_id_document = None
-
-        if data.get('guest_id'):
-            # Use existing guest ID
-            guest_id_document = get_object_or_404(
-                GuestID,
-                id=data['guest_id'],
-                user=request.user
-            )
-        elif data.get('new_guest_id_r2_key'):
-            # Create new guest ID from uploaded file
-            r2_key = data['new_guest_id_r2_key']
-
-            # Verify the key belongs to this user
-            expected_prefix = f"guest-ids/{request.user.id}/"
-            if not r2_key.startswith(expected_prefix):
-                return Response(
-                    {'detail': 'Invalid guest ID upload'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Verify file exists
-            if not check_id_exists(r2_key):
-                return Response(
-                    {'detail': 'Guest ID upload not found'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Create GuestID record
-            guest_id_document = GuestID.objects.create(
-                user=request.user,
-                r2_key=r2_key,
-                id_type=data['new_guest_id_type'],
-                is_primary=True,
-            )
-
         # Create the booking
         try:
             booking = BookingService.create_booking(
@@ -287,11 +250,6 @@ class CheckoutView(APIView):
                 special_requests=data.get('special_requests', ''),
                 auto_confirm=False,  # Wait for payment
             )
-
-            # Add message to host and guest ID
-            booking.message_to_host = data.get('message_to_host', '')
-            booking.guest_id_document = guest_id_document
-            booking.save()
 
         except DoubleBookingError as e:
             return Response(
