@@ -411,7 +411,6 @@ class BookingService:
                     price_per_night=price_per_night,
                     total_price=total_price,
                     cleaning_fee=cleaning_fee,
-                    service_fee=0,
                     status=Booking.Status.CONFIRMED,
                     source=source,
                     external_uid=external_uid,

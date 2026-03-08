@@ -44,7 +44,7 @@ class BookingAdmin(ModelAdmin):
             'fields': ('check_in', 'check_out'),
         }),
         ('Pricing', {
-            'fields': ('price_per_night', 'cleaning_fee', 'service_fee', 'total_price', 'currency'),
+            'fields': ('price_per_night', 'cleaning_fee', 'total_price', 'currency'),
         }),
         ('Guest Details', {
             'fields': ('num_guests', 'guest_name', 'guest_email', 'guest_phone'),
