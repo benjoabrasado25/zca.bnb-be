@@ -52,13 +52,23 @@ class AmadeusAPIError(Exception):
 class AmadeusHotelService:
     """Service for syncing hotels from Amadeus API."""
 
-    AUTH_URL = 'https://api.amadeus.com/v1/security/oauth2/token'
-    HOTEL_LIST_URL = 'https://api.amadeus.com/v1/reference-data/locations/hotels/by-city'
-    HOTEL_BY_GEOCODE_URL = 'https://api.amadeus.com/v1/reference-data/locations/hotels/by-geocode'
+    # Use test environment by default (most users have test credentials)
+    # Set AMADEUS_USE_PRODUCTION=true in env to use production
     TIMEOUT = 30
 
     _access_token = None
     _token_expires_at = None
+
+    @classmethod
+    def get_base_url(cls) -> str:
+        """Get the base URL based on environment setting."""
+        use_production = getattr(settings, 'AMADEUS_USE_PRODUCTION', False)
+        if isinstance(use_production, str):
+            use_production = use_production.lower() in ('true', '1', 'yes')
+
+        if use_production:
+            return 'https://api.amadeus.com'
+        return 'https://test.api.amadeus.com'
 
     @classmethod
     def get_credentials(cls) -> Tuple[Optional[str], Optional[str]]:
@@ -80,9 +90,13 @@ class AmadeusHotelService:
             logger.error("Amadeus API credentials not configured")
             return None
 
+        base_url = cls.get_base_url()
+        auth_url = f"{base_url}/v1/security/oauth2/token"
+
         try:
+            logger.info(f"Attempting Amadeus auth at: {auth_url}")
             response = requests.post(
-                cls.AUTH_URL,
+                auth_url,
                 data={
                     'grant_type': 'client_credentials',
                     'client_id': api_key,
@@ -101,7 +115,7 @@ class AmadeusHotelService:
             expires_in = data.get('expires_in', 1799)  # Default 30 mins
             cls._token_expires_at = timezone.now() + timezone.timedelta(seconds=expires_in - 60)
 
-            logger.info("Amadeus access token obtained successfully")
+            logger.info(f"Amadeus access token obtained successfully (env: {base_url})")
             return cls._access_token
 
         except requests.RequestException as e:
@@ -123,9 +137,12 @@ class AmadeusHotelService:
         if not token:
             return [], "Failed to obtain Amadeus access token"
 
+        base_url = cls.get_base_url()
+        hotel_list_url = f"{base_url}/v1/reference-data/locations/hotels/by-city"
+
         try:
             response = requests.get(
-                cls.HOTEL_LIST_URL,
+                hotel_list_url,
                 params={
                     'cityCode': city_code,
                     'radius': 100,
@@ -146,7 +163,7 @@ class AmadeusHotelService:
                     return [], "Failed to refresh Amadeus access token"
 
                 response = requests.get(
-                    cls.HOTEL_LIST_URL,
+                    hotel_list_url,
                     params={
                         'cityCode': city_code,
                         'radius': 100,
@@ -198,9 +215,12 @@ class AmadeusHotelService:
         if not token:
             return [], "Failed to obtain Amadeus access token"
 
+        base_url = cls.get_base_url()
+        geocode_url = f"{base_url}/v1/reference-data/locations/hotels/by-geocode"
+
         try:
             response = requests.get(
-                cls.HOTEL_BY_GEOCODE_URL,
+                geocode_url,
                 params={
                     'latitude': latitude,
                     'longitude': longitude,
@@ -465,8 +485,11 @@ class AmadeusHotelService:
         if not api_key or not api_secret:
             return False, "AMADEUS_API_KEY and AMADEUS_API_SECRET not configured in settings"
 
+        base_url = cls.get_base_url()
+        env_name = "Production" if "test" not in base_url else "Test"
+
         token = cls.get_access_token(force_refresh=True)
         if token:
-            return True, "Successfully connected to Amadeus API"
+            return True, f"Successfully connected to Amadeus API ({env_name}: {base_url})"
         else:
-            return False, "Failed to authenticate with Amadeus API"
+            return False, f"Failed to authenticate with Amadeus API ({env_name}: {base_url}). Check your API key and secret."

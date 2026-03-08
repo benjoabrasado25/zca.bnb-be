@@ -332,6 +332,7 @@ APIFY_TOKEN = os.environ.get('APIFY_TOKEN', '')
 # Amadeus API Settings (for Hotel sync)
 AMADEUS_API_KEY = os.environ.get('AMADEUS_API_KEY', '')
 AMADEUS_API_SECRET = os.environ.get('AMADEUS_API_SECRET', '')
+AMADEUS_USE_PRODUCTION = os.environ.get('AMADEUS_USE_PRODUCTION', 'false')  # Set to 'true' for production API
 
 # Cloudflare R2 Settings for Guest IDs (PRIVATE BUCKET)
 # Separate from media bucket - no public access, uses proxy endpoint
