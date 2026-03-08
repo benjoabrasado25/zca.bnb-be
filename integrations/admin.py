@@ -60,14 +60,9 @@ class AmadeusSyncJobAdmin(ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path(
-                'sync-city/',
+                'browse-hotels/',
                 self.admin_site.admin_view(self.sync_city_view),
                 name='integrations_amadeus_sync_city',
-            ),
-            path(
-                'sync-all/',
-                self.admin_site.admin_view(self.sync_all_view),
-                name='integrations_amadeus_sync_all',
             ),
             path(
                 'test-connection/',
@@ -93,63 +88,81 @@ class AmadeusSyncJobAdmin(ModelAdmin):
         return HttpResponseRedirect(reverse('admin:integrations_amadeussyncjob_changelist'))
 
     def sync_city_view(self, request):
-        """Sync hotels for a specific city."""
-        if request.method == 'POST':
-            city_code = request.POST.get('city_code')
-            if not city_code:
-                messages.error(request, "Please select a city")
-                return HttpResponseRedirect(reverse('admin:integrations_amadeussyncjob_changelist'))
+        """Browse hotels from Amadeus and selectively import."""
+        city_code = request.GET.get('city_code') or request.POST.get('city_code')
 
-            # Get admin user as host (or create a system user)
+        # Step 3: Import selected hotels only
+        if request.method == 'POST' and request.POST.get('import_selected') == 'yes':
+            selected_ids = request.POST.getlist('hotel_ids')
+            if not selected_ids:
+                messages.error(request, "No hotels selected")
+                return HttpResponseRedirect(reverse('admin:integrations_amadeus_sync_city'))
+
+            # Fetch hotels again to get full data
+            hotels, error = AmadeusHotelService.fetch_hotels_by_city(city_code)
+            if error:
+                messages.error(request, f"Failed to fetch hotels: {error}")
+                return HttpResponseRedirect(reverse('admin:integrations_amadeus_sync_city'))
+
+            # Filter to only selected hotels
+            selected_hotels = [h for h in hotels if h.get('hotelId') in selected_ids]
+
+            # Import selected hotels
             host = request.user
+            created = 0
+            updated = 0
+            city_name = PHILIPPINE_CITY_CODES.get(city_code, city_code)
+            from listings.models import City
+            city, _ = City.objects.get_or_create(name=city_name, defaults={'country': 'Philippines'})
 
-            result = AmadeusHotelService.sync_city(city_code, host)
+            for hotel_data in selected_hotels:
+                listing, status = AmadeusHotelService.process_hotel_data(hotel_data, host, city)
+                if status == 'created':
+                    created += 1
+                elif status == 'updated':
+                    updated += 1
 
-            if result['success']:
-                messages.success(
-                    request,
-                    f"Synced {result['found']} hotels for {city_code}: "
-                    f"{result['created']} created, {result['updated']} updated"
-                )
-            else:
-                messages.error(request, f"Sync failed: {', '.join(result['errors'])}")
+            messages.success(request, f"Imported {created + updated} hotels: {created} created, {updated} updated")
+            return HttpResponseRedirect(reverse('admin:listings_listing_changelist') + '?status__exact=draft')
 
-            return HttpResponseRedirect(reverse('admin:integrations_amadeussyncjob_changelist'))
+        # Step 2: Show hotels with checkboxes for selection
+        if request.method == 'POST' and city_code:
+            hotels, error = AmadeusHotelService.fetch_hotels_by_city(city_code)
 
-        # Show city selection form
+            if error:
+                messages.error(request, f"Failed to fetch hotels: {error}")
+                return HttpResponseRedirect(reverse('admin:integrations_amadeus_sync_city'))
+
+            # Check which hotels already exist
+            from listings.models import Listing
+            existing_ids = set(Listing.objects.filter(
+                amadeus_hotel_id__in=[h.get('hotelId') for h in hotels]
+            ).values_list('amadeus_hotel_id', flat=True))
+
+            for hotel in hotels:
+                hotel['already_exists'] = hotel.get('hotelId') in existing_ids
+
+            context = {
+                'title': f'Browse Hotels - {PHILIPPINE_CITY_CODES.get(city_code, city_code)}',
+                'city_code': city_code,
+                'city_name': PHILIPPINE_CITY_CODES.get(city_code, city_code),
+                'hotels': hotels,
+                'hotels_count': len(hotels),
+                'new_hotels_count': len([h for h in hotels if not h.get('already_exists')]),
+                'opts': self.model._meta,
+                'show_hotels': True,
+            }
+            return render(request, 'admin/integrations/amadeus_sync_city.html', context)
+
+        # Step 1: Show city selection form
         context = {
-            'title': 'Sync Hotels by City',
+            'title': 'Browse Hotels from Amadeus',
             'philippine_cities': PHILIPPINE_CITY_CODES,
             'opts': self.model._meta,
+            'show_hotels': False,
         }
         return render(request, 'admin/integrations/amadeus_sync_city.html', context)
 
-    def sync_all_view(self, request):
-        """Sync hotels for all Philippine cities."""
-        if request.method == 'POST':
-            host = request.user
-
-            result = AmadeusHotelService.sync_all_philippine_cities(host)
-
-            messages.success(
-                request,
-                f"Synced {result['cities_synced']} cities: "
-                f"{result['total_found']} hotels found, "
-                f"{result['total_created']} created, {result['total_updated']} updated"
-            )
-
-            if result['errors']:
-                messages.warning(request, f"Some errors occurred: {', '.join(result['errors'][:5])}")
-
-            return HttpResponseRedirect(reverse('admin:integrations_amadeussyncjob_changelist'))
-
-        # Confirmation page
-        context = {
-            'title': 'Sync All Philippine Cities',
-            'philippine_cities': PHILIPPINE_CITY_CODES,
-            'opts': self.model._meta,
-        }
-        return render(request, 'admin/integrations/amadeus_sync_all.html', context)
 
 
 # Note: IcalSync is now managed as an inline within the Listing admin
