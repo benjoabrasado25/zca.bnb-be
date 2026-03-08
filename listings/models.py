@@ -180,7 +180,6 @@ class Listing(models.Model):
         default=Status.DRAFT,
     )
     is_instant_bookable = models.BooleanField(default=False)
-    is_inquiry_only = models.BooleanField(default=False, help_text='Show inquiry form instead of booking')
     is_featured = models.BooleanField(default=False, help_text='Featured on homepage')
 
     # Airbnb Integration
