@@ -175,11 +175,15 @@ class BlockedDateViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        listing = get_object_or_404(
-            Listing,
-            id=serializer.validated_data['listing'].id,
-            host=request.user
-        )
+        # Get the listing from validated data (PrimaryKeyRelatedField returns Listing object)
+        listing = serializer.validated_data['listing']
+
+        # Verify the user owns this listing
+        if listing.host != request.user:
+            return Response(
+                {'detail': 'You do not have permission to block dates for this listing.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         try:
             blocked = BookingService.block_dates(
