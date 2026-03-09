@@ -97,6 +97,7 @@ class ListingAdmin(ModelAdmin):
         'is_featured',
         'is_instant_bookable',
         'airbnb_synced',
+        'has_google',
         'has_klook',
         'created_at',
     ]
@@ -114,6 +115,12 @@ class ListingAdmin(ModelAdmin):
             return format_html('<span style="color: green;">&#10003; {}</span>', obj.airbnb_id)
         return format_html('<span style="color: gray;">-</span>')
     airbnb_synced.short_description = 'Airbnb'
+
+    def has_google(self, obj):
+        if obj.google_place_id:
+            return format_html('<span style="color: #4285f4;" title="{}">&#10003;</span>', obj.google_place_id)
+        return format_html('<span style="color: gray;">-</span>')
+    has_google.short_description = 'Google'
 
     def has_klook(self, obj):
         if obj.klook_affiliate_url:

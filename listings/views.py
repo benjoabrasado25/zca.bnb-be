@@ -75,6 +75,7 @@ class ListingFilter(filters.FilterSet):
     property_category = filters.ChoiceFilter(choices=Listing.PropertyCategory.choices)
     instant_bookable = filters.BooleanFilter(field_name='is_instant_bookable')
     featured = filters.BooleanFilter(field_name='is_featured')
+    min_rating = filters.NumberFilter(field_name='rating', lookup_expr='gte')
 
     # Date availability filters (support both snake_case and camelCase)
     check_in = filters.DateFilter(method='filter_availability')
@@ -88,7 +89,7 @@ class ListingFilter(filters.FilterSet):
             'city', 'city_name', 'province', 'property_type', 'property_category',
             'min_price', 'max_price', 'min_guests', 'guests', 'adults', 'children',
             'bedrooms', 'beds', 'bathrooms', 'instant_bookable', 'featured',
-            'check_in', 'check_out', 'checkIn', 'checkOut',
+            'min_rating', 'check_in', 'check_out', 'checkIn', 'checkOut',
         ]
 
     def filter_by_total_guests(self, queryset, name, value):
