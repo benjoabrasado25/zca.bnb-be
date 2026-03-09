@@ -97,6 +97,9 @@ class ListingListSerializer(serializers.ModelSerializer):
             'latitude',
             'longitude',
             'booked_dates',
+            'google_place_id',
+            'rating',
+            'reviews_count',
         ]
 
     def get_primary_image(self, obj):
@@ -213,6 +216,10 @@ class ListingDetailSerializer(serializers.ModelSerializer):
             'airbnb_url',
             'klook_affiliate_url',
             'google_maps_url',
+            'google_place_id',
+            'rating',
+            'reviews_count',
+            'reviews',
             'created_at',
             'updated_at',
         ]

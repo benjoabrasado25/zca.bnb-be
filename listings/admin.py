@@ -104,7 +104,7 @@ class ListingAdmin(ModelAdmin):
     search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
     readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
     inlines = [ListingImageInline, ListingAmenityMappingInline, BlockedDateInline, IcalSyncInline]
-    actions = ['approve_listings', 'reject_listings', 'set_pending_review', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
+    actions = ['approve_listings', 'reject_listings', 'set_pending_review', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb', 'refresh_from_google']
     autocomplete_fields = ['host', 'city']
     list_editable = ['is_featured']
     change_list_template = 'admin/listings/listing/change_list.html'
@@ -358,6 +358,78 @@ class ListingAdmin(ModelAdmin):
                 self.message_user(request, f'Sync job started for {len(urls)} listing(s). Job ID: {run_id}')
         except Exception as e:
             self.message_user(request, f'Error: {str(e)}', level=messages.ERROR)
+
+
+    @admin.action(description='🔄 Refresh selected from Google Places')
+    def refresh_from_google(self, request, queryset):
+        """Re-sync selected listings that have Google Place IDs."""
+        from integrations.google_places_service import GooglePlacesService
+
+        service = GooglePlacesService()
+        if not service.api_key:
+            self.message_user(request, 'GOOGLE_PLACES_API_KEY is not configured.', level=messages.ERROR)
+            return
+
+        google_listings = queryset.exclude(google_place_id='').exclude(google_place_id__isnull=True)
+        if not google_listings.exists():
+            self.message_user(request, 'No listings with Google Place IDs selected.', level=messages.WARNING)
+            return
+
+        updated = 0
+        errors = []
+        for listing in google_listings:
+            try:
+                # Get fresh data from Google Places
+                place_data = service.get_place_details(listing.google_place_id)
+                if place_data:
+                    # Update listing fields
+                    if place_data.get('displayName', {}).get('text'):
+                        listing.title = place_data['displayName']['text']
+
+                    if place_data.get('formattedAddress'):
+                        listing.address = place_data['formattedAddress']
+
+                    if place_data.get('editorialSummary', {}).get('text'):
+                        listing.description = place_data['editorialSummary']['text']
+
+                    if place_data.get('rating'):
+                        listing.rating = place_data['rating']
+
+                    if place_data.get('userRatingCount'):
+                        listing.reviews_count = place_data['userRatingCount']
+
+                    # Update reviews
+                    google_reviews = place_data.get('reviews', [])
+                    if google_reviews and isinstance(google_reviews, list):
+                        parsed_reviews = []
+                        for review in google_reviews[:10]:
+                            review_text = review.get('text', {})
+                            text = review_text.get('text', '') if isinstance(review_text, dict) else ''
+                            author = review.get('authorAttribution', {})
+                            parsed_reviews.append({
+                                'author': author.get('displayName', 'Guest'),
+                                'author_photo': author.get('photoUri', ''),
+                                'rating': review.get('rating', 5),
+                                'text': text,
+                                'time': review.get('publishTime', ''),
+                                'source': 'google',
+                            })
+                        if parsed_reviews:
+                            listing.reviews = parsed_reviews
+
+                    listing.last_synced = timezone.now()
+                    listing.save()
+                    updated += 1
+                else:
+                    errors.append(f'No data returned for {listing.title}')
+            except Exception as e:
+                errors.append(f'Error refreshing {listing.title}: {str(e)}')
+
+        if updated > 0:
+            self.message_user(request, f'Successfully refreshed {updated} listing(s) from Google Places.')
+        if errors:
+            for error in errors[:5]:  # Limit error messages
+                self.message_user(request, error, level=messages.WARNING)
 
 
 @admin.register(ListingAmenity)

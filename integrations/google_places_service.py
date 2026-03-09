@@ -191,7 +191,6 @@ class GooglePlacesService:
                         'accessibilityOptions',
                         'parkingOptions',
                         'paymentOptions',
-                        'amenities',
                     ]),
                 },
                 timeout=cls.TIMEOUT,
@@ -356,6 +355,25 @@ class GooglePlacesService:
                 listing.rating = Decimal(str(place_data['rating']))
             if place_data.get('userRatingCount'):
                 listing.reviews_count = place_data['userRatingCount']
+
+            # Save reviews from Google Places
+            google_reviews = place_data.get('reviews', [])
+            if google_reviews and isinstance(google_reviews, list):
+                parsed_reviews = []
+                for review in google_reviews[:10]:  # Limit to 10 reviews
+                    review_text = review.get('text', {})
+                    text = review_text.get('text', '') if isinstance(review_text, dict) else ''
+                    author = review.get('authorAttribution', {})
+                    parsed_reviews.append({
+                        'author': author.get('displayName', 'Guest'),
+                        'author_photo': author.get('photoUri', ''),
+                        'rating': review.get('rating', 5),
+                        'text': text,
+                        'time': review.get('publishTime', ''),
+                        'source': 'google',
+                    })
+                if parsed_reviews:
+                    listing.reviews = parsed_reviews
 
             # Description from editorial summary or generate from available data
             editorial = place_data.get('editorialSummary', {})
