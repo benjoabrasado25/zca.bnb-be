@@ -94,6 +94,10 @@ class GooglePlacesSyncJobAdmin(ModelAdmin):
             selected_ids = request.POST.getlist('place_ids')
             download_images = request.POST.get('download_images') == 'on'
 
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Import request - selected_ids: {selected_ids}, download_images: {download_images}")
+
             if not selected_ids:
                 messages.error(request, "No hotels selected")
                 return HttpResponseRedirect(reverse('admin:integrations_google_browse_hotels'))
@@ -107,6 +111,10 @@ class GooglePlacesSyncJobAdmin(ModelAdmin):
 
             # Filter to selected places
             selected_places = [p for p in places if p.get('id') in selected_ids]
+
+            if not selected_places:
+                messages.error(request, f"No matching places found. Selected IDs: {selected_ids[:3]}... Found IDs: {[p.get('id')[:20] for p in places[:3]]}...")
+                return HttpResponseRedirect(reverse('admin:integrations_google_browse_hotels'))
 
             # Get or create city
             from listings.models import City
@@ -122,11 +130,14 @@ class GooglePlacesSyncJobAdmin(ModelAdmin):
             created = 0
             updated = 0
 
+            errors = []
             for place_data in selected_places:
                 # Get full details for each place
-                details, _ = GooglePlacesService.get_place_details(place_data.get('id'))
+                details, detail_error = GooglePlacesService.get_place_details(place_data.get('id'))
                 if details:
                     place_data.update(details)
+                elif detail_error:
+                    errors.append(f"Details error for {place_data.get('id')}: {detail_error}")
 
                 listing, status = GooglePlacesService.process_place_to_listing(
                     place_data, host, city, download_images
@@ -135,6 +146,11 @@ class GooglePlacesSyncJobAdmin(ModelAdmin):
                     created += 1
                 elif status == 'updated':
                     updated += 1
+                elif status.startswith('error:'):
+                    errors.append(status)
+
+            if errors:
+                messages.warning(request, f"Errors during import: {'; '.join(errors[:3])}")
 
             messages.success(
                 request,
