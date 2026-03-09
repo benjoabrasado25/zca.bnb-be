@@ -127,8 +127,8 @@ class AirbnbSyncJob(models.Model):
 ApifySyncJob = AirbnbSyncJob
 
 
-class AmadeusSyncJob(models.Model):
-    """Track sync jobs for importing hotels from Amadeus API."""
+class GooglePlacesSyncJob(models.Model):
+    """Track sync jobs for importing hotels from Google Places API."""
 
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
@@ -136,26 +136,10 @@ class AmadeusSyncJob(models.Model):
         SUCCEEDED = 'succeeded', 'Succeeded'
         FAILED = 'failed', 'Failed'
 
-    class SyncType(models.TextChoices):
-        CITY_SEARCH = 'city_search', 'City Search'
-        HOTEL_LIST = 'hotel_list', 'Hotel List'
-        GEOCODE = 'geocode', 'Geocode Search'
-
-    # Job identification
     job_id = models.CharField(max_length=100, unique=True)
-    sync_type = models.CharField(
-        max_length=20,
-        choices=SyncType.choices,
-        default=SyncType.CITY_SEARCH,
-    )
+    search_query = models.CharField(max_length=255, help_text='Search query (e.g., "hotels in Manila")')
+    city_name = models.CharField(max_length=100, blank=True)
 
-    # Search parameters
-    city_code = models.CharField(max_length=10, blank=True, help_text='IATA city code (e.g., MNL)')
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    radius = models.PositiveIntegerField(default=50, help_text='Search radius in km')
-
-    # Job status
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -165,17 +149,15 @@ class AmadeusSyncJob(models.Model):
     hotels_created = models.PositiveIntegerField(default=0)
     hotels_updated = models.PositiveIntegerField(default=0)
     error_message = models.TextField(blank=True)
-    raw_response = models.JSONField(null=True, blank=True)
 
-    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        db_table = 'amadeus_sync_jobs'
-        verbose_name = 'Amadeus Sync Job'
-        verbose_name_plural = 'Amadeus Sync Jobs'
+        db_table = 'google_places_sync_jobs'
+        verbose_name = 'Google Places Sync Job'
+        verbose_name_plural = 'Google Places Sync Jobs'
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Amadeus Sync {self.job_id} - {self.city_code or 'Geocode'} ({self.status})"
+        return f"Google Places Sync - {self.city_name or self.search_query} ({self.status})"

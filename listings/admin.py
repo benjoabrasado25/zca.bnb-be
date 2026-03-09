@@ -97,13 +97,12 @@ class ListingAdmin(ModelAdmin):
         'is_featured',
         'is_instant_bookable',
         'airbnb_synced',
-        'amadeus_synced',
         'has_klook',
         'created_at',
     ]
-    list_filter = ['status', 'property_type', 'property_category', 'city', 'is_instant_bookable', 'is_featured', 'cancellation_policy', 'amadeus_chain_code']
-    search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id', 'amadeus_hotel_id']
-    readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced', 'amadeus_hotel_id', 'amadeus_last_synced']
+    list_filter = ['status', 'property_type', 'property_category', 'city', 'is_instant_bookable', 'is_featured', 'cancellation_policy']
+    search_fields = ['title', 'description', 'address', 'host__username', 'host__email', 'airbnb_id']
+    readonly_fields = ['ical_export_token', 'created_at', 'updated_at', 'submitted_for_review_at', 'reviewed_at', 'airbnb_id', 'last_synced']
     inlines = [ListingImageInline, ListingAmenityMappingInline, BlockedDateInline, IcalSyncInline]
     actions = ['approve_listings', 'reject_listings', 'set_pending_review', 'feature_listings', 'unfeature_listings', 'sync_from_airbnb']
     autocomplete_fields = ['host', 'city']
@@ -115,12 +114,6 @@ class ListingAdmin(ModelAdmin):
             return format_html('<span style="color: green;">&#10003; {}</span>', obj.airbnb_id)
         return format_html('<span style="color: gray;">-</span>')
     airbnb_synced.short_description = 'Airbnb'
-
-    def amadeus_synced(self, obj):
-        if obj.amadeus_hotel_id:
-            return format_html('<span style="color: #7c3aed;">&#10003; {}</span>', obj.amadeus_hotel_id)
-        return format_html('<span style="color: gray;">-</span>')
-    amadeus_synced.short_description = 'Amadeus'
 
     def has_klook(self, obj):
         if obj.klook_affiliate_url:
@@ -279,13 +272,8 @@ class ListingAdmin(ModelAdmin):
             'fields': ('airbnb_id', 'airbnb_url', 'booking_url', 'last_synced'),
             'classes': ('collapse',),
         }),
-        ('Amadeus Integration', {
-            'fields': ('amadeus_hotel_id', 'amadeus_chain_code', 'amadeus_last_synced'),
-            'classes': ('collapse',),
-        }),
         ('Affiliate Links', {
             'fields': ('klook_affiliate_url',),
-            'classes': ('collapse',),
         }),
         ('Review Status', {
             'fields': ('submitted_for_review_at', 'reviewed_at', 'reviewed_by', 'rejection_reason'),

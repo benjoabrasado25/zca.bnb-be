@@ -6,11 +6,9 @@ from django.urls import path, reverse
 from django.shortcuts import render
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
-from unfold.decorators import action
 
-from users.models import User
-from .models import IcalSync, IcalSyncLog, AirbnbSyncJob, AmadeusSyncJob
-from .amadeus_service import AmadeusHotelService, PHILIPPINE_CITY_CODES
+from .models import IcalSync, IcalSyncLog, AirbnbSyncJob, GooglePlacesSyncJob
+from .google_places_service import GooglePlacesService, PHILIPPINE_CITIES
 
 
 class IcalSyncLogInline(TabularInline):
@@ -33,26 +31,26 @@ class AirbnbSyncJobAdmin(ModelAdmin):
     ordering = ['-created_at']
 
 
-@admin.register(AmadeusSyncJob)
-class AmadeusSyncJobAdmin(ModelAdmin):
-    """Admin for Amadeus sync jobs with sync actions."""
+@admin.register(GooglePlacesSyncJob)
+class GooglePlacesSyncJobAdmin(ModelAdmin):
+    """Admin for Google Places sync jobs."""
 
     list_display = [
         'job_id',
-        'sync_type',
-        'city_code',
+        'city_name',
+        'search_query',
         'status',
         'hotels_found',
         'hotels_created',
         'hotels_updated',
         'created_at',
     ]
-    list_filter = ['status', 'sync_type', 'city_code', 'created_at']
-    search_fields = ['job_id', 'city_code']
+    list_filter = ['status', 'city_name', 'created_at']
+    search_fields = ['job_id', 'city_name', 'search_query']
     readonly_fields = [
-        'job_id', 'sync_type', 'city_code', 'latitude', 'longitude', 'radius',
+        'job_id', 'search_query', 'city_name',
         'status', 'hotels_found', 'hotels_created', 'hotels_updated',
-        'error_message', 'raw_response', 'created_at', 'completed_at',
+        'error_message', 'created_at', 'completed_at',
     ]
     ordering = ['-created_at']
 
@@ -61,109 +59,131 @@ class AmadeusSyncJobAdmin(ModelAdmin):
         custom_urls = [
             path(
                 'browse-hotels/',
-                self.admin_site.admin_view(self.sync_city_view),
-                name='integrations_amadeus_sync_city',
+                self.admin_site.admin_view(self.browse_hotels_view),
+                name='integrations_google_browse_hotels',
             ),
             path(
                 'test-connection/',
                 self.admin_site.admin_view(self.test_connection_view),
-                name='integrations_amadeus_test_connection',
+                name='integrations_google_test_connection',
             ),
         ]
         return custom_urls + urls
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['philippine_cities'] = PHILIPPINE_CITY_CODES
-        extra_context['show_sync_buttons'] = True
+        extra_context['philippine_cities'] = PHILIPPINE_CITIES
         return super().changelist_view(request, extra_context=extra_context)
 
     def test_connection_view(self, request):
-        """Test Amadeus API connection."""
-        success, message = AmadeusHotelService.test_connection()
+        """Test Google Places API connection."""
+        success, message = GooglePlacesService.test_connection()
         if success:
             messages.success(request, message)
         else:
             messages.error(request, message)
-        return HttpResponseRedirect(reverse('admin:integrations_amadeussyncjob_changelist'))
+        return HttpResponseRedirect(reverse('admin:integrations_googleplacessyncjob_changelist'))
 
-    def sync_city_view(self, request):
-        """Browse hotels from Amadeus and selectively import."""
-        city_code = request.GET.get('city_code') or request.POST.get('city_code')
+    def browse_hotels_view(self, request):
+        """Browse and import hotels from Google Places."""
+        city_name = request.GET.get('city_name') or request.POST.get('city_name')
+        custom_query = request.POST.get('custom_query', '').strip()
 
-        # Step 3: Import selected hotels only
+        # Step 3: Import selected hotels
         if request.method == 'POST' and request.POST.get('import_selected') == 'yes':
-            selected_ids = request.POST.getlist('hotel_ids')
+            selected_ids = request.POST.getlist('place_ids')
+            download_images = request.POST.get('download_images') == 'on'
+
             if not selected_ids:
                 messages.error(request, "No hotels selected")
-                return HttpResponseRedirect(reverse('admin:integrations_amadeus_sync_city'))
+                return HttpResponseRedirect(reverse('admin:integrations_google_browse_hotels'))
 
-            # Fetch hotels again to get full data
-            hotels, error = AmadeusHotelService.fetch_hotels_by_city(city_code)
+            # Search again to get full data
+            query = custom_query or f"hotels in {city_name}, Philippines"
+            places, error = GooglePlacesService.search_hotels(query)
             if error:
                 messages.error(request, f"Failed to fetch hotels: {error}")
-                return HttpResponseRedirect(reverse('admin:integrations_amadeus_sync_city'))
+                return HttpResponseRedirect(reverse('admin:integrations_google_browse_hotels'))
 
-            # Filter to only selected hotels
-            selected_hotels = [h for h in hotels if h.get('hotelId') in selected_ids]
+            # Filter to selected places
+            selected_places = [p for p in places if p.get('id') in selected_ids]
 
-            # Import selected hotels
+            # Get or create city
+            from listings.models import City
+            city = None
+            if city_name:
+                city, _ = City.objects.get_or_create(
+                    name=city_name,
+                    defaults={'country': 'Philippines'}
+                )
+
+            # Import selected
             host = request.user
             created = 0
             updated = 0
-            city_name = PHILIPPINE_CITY_CODES.get(city_code, city_code)
-            from listings.models import City
-            city, _ = City.objects.get_or_create(name=city_name, defaults={'country': 'Philippines'})
 
-            for hotel_data in selected_hotels:
-                listing, status = AmadeusHotelService.process_hotel_data(hotel_data, host, city)
+            for place_data in selected_places:
+                # Get full details for each place
+                details, _ = GooglePlacesService.get_place_details(place_data.get('id'))
+                if details:
+                    place_data.update(details)
+
+                listing, status = GooglePlacesService.process_place_to_listing(
+                    place_data, host, city, download_images
+                )
                 if status == 'created':
                     created += 1
                 elif status == 'updated':
                     updated += 1
 
-            messages.success(request, f"Imported {created + updated} hotels: {created} created, {updated} updated")
+            messages.success(
+                request,
+                f"Imported {created + updated} hotels: {created} created, {updated} updated"
+            )
             return HttpResponseRedirect(reverse('admin:listings_listing_changelist') + '?status__exact=draft')
 
-        # Step 2: Show hotels with checkboxes for selection
-        if request.method == 'POST' and city_code:
-            hotels, error = AmadeusHotelService.fetch_hotels_by_city(city_code)
+        # Step 2: Show hotels with checkboxes
+        if request.method == 'POST' and (city_name or custom_query):
+            query = custom_query or f"hotels in {city_name}, Philippines"
+            places, error = GooglePlacesService.search_hotels(query)
 
             if error:
                 messages.error(request, f"Failed to fetch hotels: {error}")
-                return HttpResponseRedirect(reverse('admin:integrations_amadeus_sync_city'))
+                return HttpResponseRedirect(reverse('admin:integrations_google_browse_hotels'))
 
-            # Check which hotels already exist
+            # Check which already exist
             from listings.models import Listing
             existing_ids = set(Listing.objects.filter(
-                amadeus_hotel_id__in=[h.get('hotelId') for h in hotels]
-            ).values_list('amadeus_hotel_id', flat=True))
+                google_place_id__in=[p.get('id') for p in places]
+            ).values_list('google_place_id', flat=True))
 
-            for hotel in hotels:
-                hotel['already_exists'] = hotel.get('hotelId') in existing_ids
+            for place in places:
+                place['already_exists'] = place.get('id') in existing_ids
+                # Extract display name
+                display_name = place.get('displayName', {})
+                place['name'] = display_name.get('text', 'Unknown') if isinstance(display_name, dict) else str(display_name)
+                # Get photo preview URL
+                photos = place.get('photos', [])
+                if photos:
+                    place['preview_photo'] = GooglePlacesService.get_photo_url(photos[0].get('name'), max_width=200)
 
             context = {
-                'title': f'Browse Hotels - {PHILIPPINE_CITY_CODES.get(city_code, city_code)}',
-                'city_code': city_code,
-                'city_name': PHILIPPINE_CITY_CODES.get(city_code, city_code),
-                'hotels': hotels,
-                'hotels_count': len(hotels),
-                'new_hotels_count': len([h for h in hotels if not h.get('already_exists')]),
+                'title': f'Browse Hotels - {city_name or "Custom Search"}',
+                'city_name': city_name,
+                'custom_query': custom_query,
+                'places': places,
+                'places_count': len(places),
+                'new_places_count': len([p for p in places if not p.get('already_exists')]),
                 'opts': self.model._meta,
-                'show_hotels': True,
+                'show_places': True,
             }
-            return render(request, 'admin/integrations/amadeus_sync_city.html', context)
+            return render(request, 'admin/integrations/google_browse_hotels.html', context)
 
-        # Step 1: Show city selection form
+        # Step 1: City/query selection
         context = {
-            'title': 'Browse Hotels from Amadeus',
-            'philippine_cities': PHILIPPINE_CITY_CODES,
+            'title': 'Browse Hotels from Google Places',
+            'philippine_cities': PHILIPPINE_CITIES,
             'opts': self.model._meta,
-            'show_hotels': False,
+            'show_places': False,
         }
-        return render(request, 'admin/integrations/amadeus_sync_city.html', context)
-
-
-
-# Note: IcalSync is now managed as an inline within the Listing admin
-# These models are kept registered but hidden from the sidebar for direct access if needed
+        return render(request, 'admin/integrations/google_browse_hotels.html', context)

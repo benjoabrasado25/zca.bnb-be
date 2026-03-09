@@ -188,10 +188,9 @@ class Listing(models.Model):
     booking_url = models.URLField(max_length=500, blank=True, help_text='External booking URL')
     last_synced = models.DateTimeField(null=True, blank=True, help_text='Last Apify sync timestamp')
 
-    # Amadeus Integration
-    amadeus_hotel_id = models.CharField(max_length=20, blank=True, db_index=True, help_text='Amadeus hotel ID (e.g., RTMANILA)')
-    amadeus_chain_code = models.CharField(max_length=10, blank=True, help_text='Hotel chain code')
-    amadeus_last_synced = models.DateTimeField(null=True, blank=True, help_text='Last Amadeus sync timestamp')
+    # Google Places Integration
+    google_place_id = models.CharField(max_length=255, blank=True, db_index=True, help_text='Google Places ID')
+    google_maps_url = models.URLField(max_length=500, blank=True, help_text='Google Maps URL')
 
     # Affiliate Links
     klook_affiliate_url = models.URLField(max_length=1000, blank=True, help_text='Klook affiliate booking URL (add manually)')
@@ -248,7 +247,6 @@ class Listing(models.Model):
             models.Index(fields=['price_per_night']),
             models.Index(fields=['host', 'status']),
             models.Index(fields=['airbnb_id']),
-            models.Index(fields=['amadeus_hotel_id']),
         ]
 
     def __str__(self):
