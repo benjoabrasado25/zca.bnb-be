@@ -211,6 +211,8 @@ class ListingDetailSerializer(serializers.ModelSerializer):
             'booked_dates',
             'booking_url',
             'airbnb_url',
+            'klook_affiliate_url',
+            'google_maps_url',
             'created_at',
             'updated_at',
         ]
