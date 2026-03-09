@@ -1,6 +1,7 @@
 # Generated migration for Google Places and Klook affiliate fields
+# Safe migration that checks for existing columns
 
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
@@ -11,46 +12,19 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            sql="""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_name = 'listings' AND column_name = 'google_place_id'
-                    ) THEN
-                        ALTER TABLE listings ADD COLUMN google_place_id VARCHAR(255) DEFAULT '';
-                    END IF;
-                END $$;
-                CREATE INDEX IF NOT EXISTS listings_google_place_id_idx ON listings(google_place_id);
-            """,
-            reverse_sql="ALTER TABLE listings DROP COLUMN IF EXISTS google_place_id;",
+            sql="ALTER TABLE listings ADD COLUMN IF NOT EXISTS google_place_id VARCHAR(255) DEFAULT '';",
+            reverse_sql="SELECT 1;",  # No-op for reverse
         ),
         migrations.RunSQL(
-            sql="""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_name = 'listings' AND column_name = 'google_maps_url'
-                    ) THEN
-                        ALTER TABLE listings ADD COLUMN google_maps_url VARCHAR(500) DEFAULT '';
-                    END IF;
-                END $$;
-            """,
-            reverse_sql="ALTER TABLE listings DROP COLUMN IF EXISTS google_maps_url;",
+            sql="CREATE INDEX IF NOT EXISTS listings_google_place_id_idx ON listings(google_place_id);",
+            reverse_sql="SELECT 1;",
         ),
         migrations.RunSQL(
-            sql="""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_name = 'listings' AND column_name = 'klook_affiliate_url'
-                    ) THEN
-                        ALTER TABLE listings ADD COLUMN klook_affiliate_url VARCHAR(1000) DEFAULT '';
-                    END IF;
-                END $$;
-            """,
-            reverse_sql="ALTER TABLE listings DROP COLUMN IF EXISTS klook_affiliate_url;",
+            sql="ALTER TABLE listings ADD COLUMN IF NOT EXISTS google_maps_url VARCHAR(500) DEFAULT '';",
+            reverse_sql="SELECT 1;",
+        ),
+        migrations.RunSQL(
+            sql="ALTER TABLE listings ADD COLUMN IF NOT EXISTS klook_affiliate_url VARCHAR(1000) DEFAULT '';",
+            reverse_sql="SELECT 1;",
         ),
     ]
