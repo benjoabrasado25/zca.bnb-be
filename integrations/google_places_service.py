@@ -357,10 +357,35 @@ class GooglePlacesService:
             if place_data.get('userRatingCount'):
                 listing.reviews_count = place_data['userRatingCount']
 
-            # Description from editorial summary
+            # Description from editorial summary or generate from available data
             editorial = place_data.get('editorialSummary', {})
-            if editorial and isinstance(editorial, dict):
-                listing.description = editorial.get('text', '') or listing.description
+            if editorial and isinstance(editorial, dict) and editorial.get('text'):
+                listing.description = editorial.get('text')
+            elif not listing.description:
+                # Generate a basic description from available data
+                desc_parts = []
+                address = place_data.get('formattedAddress', '')
+                if address:
+                    desc_parts.append(f"Located at {address}.")
+
+                rating = place_data.get('rating')
+                review_count = place_data.get('userRatingCount', 0)
+                if rating and review_count:
+                    desc_parts.append(f"Rated {rating} stars based on {review_count} reviews.")
+
+                # Add first review text if available
+                reviews = place_data.get('reviews', [])
+                if reviews and isinstance(reviews, list) and len(reviews) > 0:
+                    first_review = reviews[0]
+                    review_text = first_review.get('text', {})
+                    if isinstance(review_text, dict) and review_text.get('text'):
+                        # Truncate long reviews
+                        text = review_text.get('text', '')[:500]
+                        if text:
+                            desc_parts.append(f"\n\nGuest review: \"{text}\"")
+
+                if desc_parts:
+                    listing.description = ' '.join(desc_parts)
 
             # City
             if city:
