@@ -1,4 +1,4 @@
-# Fix amadeus_hotel_id column - make it nullable or add default
+# Fix ALL amadeus columns - make them nullable
 
 from django.db import migrations
 
@@ -10,18 +10,22 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Make amadeus_hotel_id nullable if it exists
+        # Fix all amadeus columns at once
         migrations.RunSQL(
             sql="""
                 DO $$
+                DECLARE
+                    col_name TEXT;
                 BEGIN
-                    IF EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_name = 'listings' AND column_name = 'amadeus_hotel_id'
-                    ) THEN
-                        ALTER TABLE listings ALTER COLUMN amadeus_hotel_id DROP NOT NULL;
-                        ALTER TABLE listings ALTER COLUMN amadeus_hotel_id SET DEFAULT '';
-                    END IF;
+                    FOR col_name IN
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = 'listings'
+                        AND column_name LIKE 'amadeus%'
+                    LOOP
+                        EXECUTE format('ALTER TABLE listings ALTER COLUMN %I DROP NOT NULL', col_name);
+                        EXECUTE format('ALTER TABLE listings ALTER COLUMN %I SET DEFAULT %L', col_name, '');
+                    END LOOP;
                 END $$;
             """,
             reverse_sql="SELECT 1;",
